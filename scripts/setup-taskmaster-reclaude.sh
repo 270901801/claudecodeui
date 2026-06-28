@@ -30,7 +30,9 @@ fi
 if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   # shellcheck source=/dev/null
   source "$HOME/.nvm/nvm.sh"
-  nvm install "$NODE_VERSION" >/dev/null
+  if [[ "$(nvm version "$NODE_VERSION" 2>/dev/null || true)" == "N/A" ]]; then
+    nvm install "$NODE_VERSION" >/dev/null
+  fi
   nvm use "$NODE_VERSION" >/dev/null
 fi
 

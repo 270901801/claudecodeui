@@ -28,6 +28,7 @@
 - 新增 `scripts/bootstrap-reclaude-cloudcli-macos.sh`，用于新 Mac 一键 clone/pull、配置 ReClaude alias、安装 TaskMaster、启动 screen 服务并注册默认 admin。
 - 新增 Shell 移动端体验分析文档 `doc/2026-06-28-shell-mobile-ux-analysis.md`。
 - 真实重跑 bootstrap 时发现 `setup-taskmaster-reclaude.sh` 会重复执行全局 `npm install -g task-master-ai`。已改为当前 Node 下已有 `task-master` 和 `task-master-ai` 时跳过，必要时用 `FORCE_TASKMASTER_INSTALL=1` 强制重装。
+- raw GitHub 脚本下载本身也可能被网络卡住，文档补充 `HTTP_PROXY/HTTPS_PROXY` 用法。nvm 子脚本改为已安装目标 Node 时直接 `nvm use`，避免镜像源下重复解析 `22` 别名失败。
 
 ## 新 Mac SSH 记录
 

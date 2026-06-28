@@ -58,4 +58,4 @@ ensure_local_bin_path "$HOME/.zprofile"
 ensure_local_bin_path "$HOME/.zshrc"
 
 echo "claude now resolves to: $CLAUDE_ALIAS_PATH"
-"$CLAUDE_ALIAS_PATH" mcp list
+"$CLAUDE_ALIAS_PATH" mcp list || true

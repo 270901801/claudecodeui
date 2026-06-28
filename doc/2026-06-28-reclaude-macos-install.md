@@ -57,9 +57,11 @@ PORT=3002 ./scripts/start-reclaude-cloudcli.sh
 curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts/bootstrap-reclaude-cloudcli-macos.sh | bash
 ```
 
-常用覆盖参数：
+国内网络下，拉取 raw GitHub 脚本本身也要走代理：
 
 ```bash
+HTTPS_PROXY=http://127.0.0.1:7897 \
+HTTP_PROXY=http://127.0.0.1:7897 \
 curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts/bootstrap-reclaude-cloudcli-macos.sh | \
   PORT=3002 \
   CLOUDCLI_INSTALL_DIR="$HOME/code/claudecodeui" \

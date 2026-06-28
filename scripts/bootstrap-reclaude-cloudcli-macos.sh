@@ -47,7 +47,9 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   if [[ -n "${NODE_MIRROR:-}" ]]; then
     export NVM_NODEJS_ORG_MIRROR="$NODE_MIRROR"
   fi
-  nvm install "$NODE_VERSION"
+  if [[ "$(nvm version "$NODE_VERSION" 2>/dev/null || true)" == "N/A" ]]; then
+    nvm install "$NODE_VERSION"
+  fi
   nvm use "$NODE_VERSION"
 else
   node_major="$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || true)"
