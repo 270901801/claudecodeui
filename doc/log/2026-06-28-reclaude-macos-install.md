@@ -23,6 +23,7 @@
 - 使用 `NPM_REGISTRY=https://registry.npmmirror.com/` 和 `USE_LOCAL_PROXY=1` 后，`task-master-ai@0.43.1` 在约 3 分钟内完成全局安装。
 - `reclaude mcp list` 已显示 `task-master-ai` connected。
 - 新 Mac 上 CloudCLI Web 已在 `3002` 端口启动，`/api/taskmaster/installation-status` 返回 `isReady=true`。
+- 追加系统级 `claude -> reclaude` 对齐：新增 `scripts/setup-reclaude-claude-alias.sh`，备份原 `~/.local/bin/claude` 并创建 wrapper，同时把 `~/.local/bin` 写入 zsh PATH。
 
 ## 新 Mac SSH 记录
 

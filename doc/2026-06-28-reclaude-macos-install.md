@@ -27,6 +27,7 @@ git clone https://github.com/270901801/claudecodeui.git
 cd claudecodeui
 git checkout codex/reclaude-install-hardening
 chmod +x scripts/start-reclaude-cloudcli.sh scripts/setup-taskmaster-reclaude.sh
+./scripts/setup-reclaude-claude-alias.sh
 ./scripts/setup-taskmaster-reclaude.sh
 PORT=3002 ./scripts/start-reclaude-cloudcli.sh
 ```
@@ -34,6 +35,11 @@ PORT=3002 ./scripts/start-reclaude-cloudcli.sh
 国内网络推荐启动方式：
 
 ```bash
+USE_LOCAL_PROXY=1 \
+NODE_MIRROR=https://npmmirror.com/mirrors/node \
+NPM_REGISTRY=https://registry.npmmirror.com/ \
+./scripts/setup-reclaude-claude-alias.sh
+
 USE_LOCAL_PROXY=1 \
 NODE_MIRROR=https://npmmirror.com/mirrors/node \
 NPM_REGISTRY=https://registry.npmmirror.com/ \
@@ -55,6 +61,37 @@ ELECTRON_SKIP_BINARY_DOWNLOAD=1
 ```
 
 `USE_LOCAL_PROXY=1` 会自动探测 `127.0.0.1:7897` 和 `127.0.0.1:7890`，适配 Clash Verge/ClashX 常见端口。
+
+## 坑 0：只配置 CloudCLI 变量，不等于系统级替换 claude
+
+现象：CloudCLI 服务进程里已经有：
+
+```text
+CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude
+```
+
+但在新 Mac 的普通 shell 里执行 `claude`，仍然可能找不到命令，或命中 Anthropic 原版 Claude。
+
+原因：`CLAUDE_CLI_PATH` 只影响 CloudCLI 服务进程和由它启动的 Claude SDK/Shell 入口；它不会自动改系统 PATH，也不会覆盖已有的 `~/.local/bin/claude`。
+
+修复：运行：
+
+```bash
+./scripts/setup-reclaude-claude-alias.sh
+```
+
+该脚本会：
+
+- 把已有 `~/.local/bin/claude` 备份为 `~/.local/bin/claude-original`
+- 创建新的 `~/.local/bin/claude` wrapper，实际执行 `~/.local/bin/reclaude`
+- 在 `~/.zprofile` 和 `~/.zshrc` 加入 `~/.local/bin` 到 PATH
+
+验证：
+
+```bash
+command -v claude
+claude mcp list
+```
 
 ## 坑 1：Shell 入口仍调用 claude
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="$HOME/.local/bin:$PATH"
 NODE_VERSION="${NODE_VERSION:-22}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org/}"
 RECLAUDE_PATH="${CLAUDE_CLI_PATH:-$HOME/.local/bin/reclaude}"
