@@ -81,6 +81,19 @@ function extractTasksFromJson(tasksData: unknown): TaskMasterTask[] {
   return taggedTaskCollections;
 }
 
+function buildEmptyTaskMetadata(lastModified: string): Exclude<TaskMasterMetadata, { error: string } | null> {
+  return {
+    taskCount: 0,
+    subtaskCount: 0,
+    completed: 0,
+    pending: 0,
+    inProgress: 0,
+    review: 0,
+    completionPercentage: 0,
+    lastModified,
+  };
+}
+
 async function detectTaskMasterFolder(projectPath: string): Promise<TaskMasterDetectionResult> {
   try {
     const taskMasterPath = path.join(projectPath, '.taskmaster');
@@ -116,7 +129,7 @@ async function detectTaskMasterFolder(projectPath: string): Promise<TaskMasterDe
         fileStatus[fileName] = true;
       } catch {
         fileStatus[fileName] = false;
-        if (fileName === 'tasks/tasks.json') {
+        if (fileName === 'config.json') {
           hasEssentialFiles = false;
         }
       }
@@ -172,6 +185,9 @@ async function detectTaskMasterFolder(projectPath: string): Promise<TaskMasterDe
           error: 'Failed to parse tasks.json',
         };
       }
+    } else if (hasEssentialFiles) {
+      const configStat = await stat(path.join(taskMasterPath, 'config.json'));
+      taskMetadata = buildEmptyTaskMetadata(configStat.mtime.toISOString());
     }
 
     return {

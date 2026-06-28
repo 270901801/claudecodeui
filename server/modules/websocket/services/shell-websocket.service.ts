@@ -79,6 +79,10 @@ function parseShellMessage(rawMessage: RawData): ShellIncomingMessage | null {
   return payload as ShellIncomingMessage;
 }
 
+function readClaudeShellCommand(): string {
+  return process.env.CLAUDE_CLI_PATH?.trim() || 'claude';
+}
+
 const SAFE_SESSION_ID_PATTERN = /^[a-zA-Z0-9_.\-:]+$/;
 
 function resolveResumeSessionId(
@@ -161,12 +165,12 @@ function buildShellCommand(
     return initialCommand || 'opencode';
   }
 
-  const command = initialCommand || 'claude';
+  const command = initialCommand || readClaudeShellCommand();
   if (resumeSessionId) {
     if (os.platform() === 'win32') {
-      return `claude --resume "${resumeSessionId}"; if ($LASTEXITCODE -ne 0) { claude }`;
+      return `${command} --resume "${resumeSessionId}"; if ($LASTEXITCODE -ne 0) { ${command} }`;
     }
-    return `claude --resume "${resumeSessionId}" || claude`;
+    return `${command} --resume "${resumeSessionId}" || ${command}`;
   }
   return command;
 }

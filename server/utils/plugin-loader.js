@@ -24,6 +24,22 @@ function sanitizeRepoUrl(raw) {
 const ALLOWED_TYPES = ['react', 'module'];
 const ALLOWED_SLOTS = ['tab'];
 
+function getPluginNpmInstallArgs() {
+  const registry = (process.env.CLOUDCLI_PLUGIN_NPM_REGISTRY || 'https://registry.npmjs.org/').trim();
+  const args = ['install', '--ignore-scripts'];
+  if (registry) {
+    args.push(`--registry=${registry}`);
+  }
+  return args;
+}
+
+function formatProcessError(prefix, code, stderr) {
+  const trimmedStderr = stderr.trim();
+  return trimmedStderr
+    ? `${prefix} failed (exit code ${code}): ${trimmedStderr}`
+    : `${prefix} failed (exit code ${code})`;
+}
+
 export function getPluginsDir() {
   if (!fs.existsSync(PLUGINS_DIR)) {
     fs.mkdirSync(PLUGINS_DIR, { recursive: true });
@@ -339,15 +355,18 @@ export function installPluginFromGit(url) {
       // --ignore-scripts prevents postinstall hooks from executing arbitrary code.
       const packageJsonPath = path.join(tempDir, 'package.json');
       if (fs.existsSync(packageJsonPath)) {
-        const npmProcess = spawn('npm', ['install', '--ignore-scripts'], {
+        const npmProcess = spawn('npm', getPluginNpmInstallArgs(), {
           cwd: tempDir,
           stdio: ['ignore', 'pipe', 'pipe'],
         });
 
+        let npmStderr = '';
+        npmProcess.stderr.on('data', (data) => { npmStderr += data.toString(); });
+
         npmProcess.on('close', (npmCode) => {
           if (npmCode !== 0) {
             cleanupTemp();
-            return reject(new Error(`npm install for ${repoName} failed (exit code ${npmCode})`));
+            return reject(new Error(formatProcessError(`npm install for ${repoName}`, npmCode, npmStderr)));
           }
           runBuildIfNeeded(tempDir, packageJsonPath, () => finalize(manifest), (err) => { cleanupTemp(); reject(err); });
         });
@@ -406,13 +425,15 @@ export function updatePluginFromGit(name) {
       // Re-run npm install if package.json exists
       const packageJsonPath = path.join(pluginDir, 'package.json');
       if (fs.existsSync(packageJsonPath)) {
-        const npmProcess = spawn('npm', ['install', '--ignore-scripts'], {
+        const npmProcess = spawn('npm', getPluginNpmInstallArgs(), {
           cwd: pluginDir,
           stdio: ['ignore', 'pipe', 'pipe'],
         });
+        let npmStderr = '';
+        npmProcess.stderr.on('data', (data) => { npmStderr += data.toString(); });
         npmProcess.on('close', (npmCode) => {
           if (npmCode !== 0) {
-            return reject(new Error(`npm install for ${name} failed (exit code ${npmCode})`));
+            return reject(new Error(formatProcessError(`npm install for ${name}`, npmCode, npmStderr)));
           }
           runBuildIfNeeded(pluginDir, packageJsonPath, () => resolve(manifest), (err) => reject(err));
         });
