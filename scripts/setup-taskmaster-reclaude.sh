@@ -37,8 +37,24 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
 fi
 
 export npm_config_registry="$NPM_REGISTRY"
-if [[ "${FORCE_TASKMASTER_INSTALL:-0}" == "1" ]] || ! command -v task-master >/dev/null 2>&1 || ! command -v task-master-ai >/dev/null 2>&1; then
+
+install_taskmaster() {
+  if npm install -g task-master-ai --registry="$NPM_REGISTRY"; then
+    return
+  fi
+
+  echo "task-master-ai install failed; cleaning package leftovers and retrying" >&2
+  global_root="$(npm root -g)"
+  global_prefix="$(npm prefix -g)"
+  rm -rf "$global_root/task-master-ai" "$global_root"/.task-master-ai-*
+  rm -f "$global_prefix/bin/task-master" \
+    "$global_prefix/bin/task-master-ai" \
+    "$global_prefix/bin/task-master-mcp"
   npm install -g task-master-ai --registry="$NPM_REGISTRY"
+}
+
+if [[ "${FORCE_TASKMASTER_INSTALL:-0}" == "1" ]] || ! command -v task-master >/dev/null 2>&1 || ! command -v task-master-ai >/dev/null 2>&1; then
+  install_taskmaster
 else
   echo "task-master-ai already installed: $(task-master --version 2>/dev/null || true)"
 fi

@@ -209,6 +209,8 @@ NPM_REGISTRY=https://registry.npmmirror.com/ USE_LOCAL_PROXY=1 ./scripts/setup-t
 FORCE_TASKMASTER_INSTALL=1 ./scripts/setup-taskmaster-reclaude.sh
 ```
 
+如果曾经中断过 `npm install -g task-master-ai`，可能残留 `task-master-ai` 半截目录并触发 `ENOTEMPTY rename`。脚本会在首次安装失败后只清理该包自己的全局残留目录和 bin 链接，然后自动重试。
+
 然后通过 `reclaude` 添加 MCP：
 
 ```bash
