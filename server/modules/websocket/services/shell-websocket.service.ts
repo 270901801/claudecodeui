@@ -180,6 +180,10 @@ function readEnvValue(env: NodeJS.ProcessEnv, key: string): string | undefined {
   return resolvedKey ? env[resolvedKey] : undefined;
 }
 
+function shouldProtectReclaudeAlias(command: string, provider: string, isPlainShell: boolean): boolean {
+  return provider === 'claude' && !isPlainShell && command.includes('reclaude');
+}
+
 function getPathEnvKey(env: NodeJS.ProcessEnv): string {
   return Object.keys(env).find((key) => key.toLowerCase() === 'path') || 'PATH';
 }
@@ -345,6 +349,9 @@ export function handleShellConnection(
         const termCols = readNumber(data.cols, 80);
         const termRows = readNumber(data.rows, 24);
         const prioritizedPath = prioritizeUserNpmGlobalBin(process.env);
+        const reclaudeAliasEnv = shouldProtectReclaudeAlias(shellCommand, provider, isPlainShell)
+          ? { RECLAUDE_ALIAS_DEPTH: '1' }
+          : {};
 
         shellProcess = pty.spawn(shell, shellArgs, {
           name: 'xterm-256color',
@@ -353,6 +360,7 @@ export function handleShellConnection(
           cwd: resolvedProjectPath,
           env: {
             ...process.env,
+            ...reclaudeAliasEnv,
             [prioritizedPath.key]: prioritizedPath.value,
             TERM: 'xterm-256color',
             COLORTERM: 'truecolor',

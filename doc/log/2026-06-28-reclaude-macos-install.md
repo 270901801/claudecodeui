@@ -30,6 +30,7 @@
 - 真实重跑 bootstrap 时发现 `setup-taskmaster-reclaude.sh` 会重复执行全局 `npm install -g task-master-ai`。已改为当前 Node 下已有 `task-master` 和 `task-master-ai` 时跳过，必要时用 `FORCE_TASKMASTER_INSTALL=1` 强制重装。
 - raw GitHub 脚本下载本身也可能被网络卡住，文档补充 `HTTP_PROXY/HTTPS_PROXY` 用法。nvm 子脚本改为已安装目标 Node 时直接 `nvm use`，避免镜像源下重复解析 `22` 别名失败。
 - 中断过全局 TaskMaster 安装后，npm 可能在全局 node_modules 留下半截 `task-master-ai` 目录并报 `ENOTEMPTY rename`。安装脚本新增失败后定向清理 `task-master-ai` 残留并重试。
+- 新 Mac Shell 复现发现 plain shell 正常，但 Claude provider 直启 `/Users/apple/.local/bin/reclaude` 会卡在“同步配置…”。原因是它绕过 `claude` wrapper，未设置 `RECLAUDE_ALIAS_DEPTH`。服务端 Shell WebSocket 已在 Claude provider 启动 reclaude 时注入该变量。
 
 ## 新 Mac SSH 记录
 

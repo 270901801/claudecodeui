@@ -113,6 +113,8 @@ command -v claude
 claude mcp list
 ```
 
+CloudCLI Shell 还有一个独立路径：如果 Claude provider 直接执行 `CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude`，它不会经过 `claude` wrapper，也就不会自动设置 `RECLAUDE_ALIAS_DEPTH`。服务端 Shell WebSocket 已在 Claude provider 启动 `reclaude` 时补上 `RECLAUDE_ALIAS_DEPTH=1`，否则 Shell 会一直卡在“同步配置…”。
+
 ## 坑 1：Shell 入口仍调用 claude
 
 现象：普通聊天已经能通过 `reclaude` 发消息，但 Shell/恢复会话入口仍执行 `claude --resume ...`。
