@@ -51,6 +51,23 @@ NPM_REGISTRY=https://registry.npmmirror.com/ \
 PORT=3002 ./scripts/start-reclaude-cloudcli.sh
 ```
 
+一键安装方式：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts/bootstrap-reclaude-cloudcli-macos.sh | bash
+```
+
+常用覆盖参数：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts/bootstrap-reclaude-cloudcli-macos.sh | \
+  PORT=3002 \
+  CLOUDCLI_INSTALL_DIR="$HOME/code/claudecodeui" \
+  USE_CN_MIRROR=1 \
+  USE_LOCAL_PROXY=1 \
+  bash
+```
+
 启动脚本会设置：
 
 ```text
