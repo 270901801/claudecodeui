@@ -33,6 +33,10 @@ fi
 cat > "$CLAUDE_ALIAS_PATH" <<EOF
 #!/usr/bin/env bash
 # $ALIAS_MARKER
+if [[ "\${RECLAUDE_ALIAS_DEPTH:-0}" == "1" && -x "$CLAUDE_BACKUP_PATH" ]]; then
+  exec "$CLAUDE_BACKUP_PATH" "\$@"
+fi
+export RECLAUDE_ALIAS_DEPTH=1
 exec "$RECLAUDE_PATH" "\$@"
 EOF
 chmod +x "$CLAUDE_ALIAS_PATH"

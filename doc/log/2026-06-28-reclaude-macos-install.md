@@ -24,6 +24,7 @@
 - `reclaude mcp list` 已显示 `task-master-ai` connected。
 - 新 Mac 上 CloudCLI Web 已在 `3002` 端口启动，`/api/taskmaster/installation-status` 返回 `isReady=true`。
 - 追加系统级 `claude -> reclaude` 对齐：新增 `scripts/setup-reclaude-claude-alias.sh`，备份原 `~/.local/bin/claude` 并创建 wrapper，同时把 `~/.local/bin` 写入 zsh PATH。
+- 直接把 `claude` 无条件指向 `reclaude` 会导致 ReClaude 内部同步递归并持续输出“同步配置…”。wrapper 已加入 `RECLAUDE_ALIAS_DEPTH` 保护，递归调用会落回 `claude-original`。
 
 ## 新 Mac SSH 记录
 

@@ -85,6 +85,7 @@ CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude
 - 把已有 `~/.local/bin/claude` 备份为 `~/.local/bin/claude-original`
 - 创建新的 `~/.local/bin/claude` wrapper，实际执行 `~/.local/bin/reclaude`
 - 在 `~/.zprofile` 和 `~/.zshrc` 加入 `~/.local/bin` 到 PATH
+- wrapper 带 `RECLAUDE_ALIAS_DEPTH` 递归保护：ReClaude 内部再次调用 `claude` 时会转发给 `claude-original`，避免无限“同步配置”
 
 验证：
 
