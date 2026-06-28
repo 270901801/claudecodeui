@@ -201,6 +201,12 @@ npm install -g task-master-ai --registry=https://registry.npmjs.org/
 NPM_REGISTRY=https://registry.npmmirror.com/ USE_LOCAL_PROXY=1 ./scripts/setup-taskmaster-reclaude.sh
 ```
 
+重复执行安装脚本时，如果 `task-master` 和 `task-master-ai` 已经在当前 Node 版本的 PATH 里，会跳过全局 npm 安装。需要强制重装时使用：
+
+```bash
+FORCE_TASKMASTER_INSTALL=1 ./scripts/setup-taskmaster-reclaude.sh
+```
+
 然后通过 `reclaude` 添加 MCP：
 
 ```bash

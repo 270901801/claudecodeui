@@ -35,7 +35,11 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
 fi
 
 export npm_config_registry="$NPM_REGISTRY"
-npm install -g task-master-ai --registry="$NPM_REGISTRY"
+if [[ "${FORCE_TASKMASTER_INSTALL:-0}" == "1" ]] || ! command -v task-master >/dev/null 2>&1 || ! command -v task-master-ai >/dev/null 2>&1; then
+  npm install -g task-master-ai --registry="$NPM_REGISTRY"
+else
+  echo "task-master-ai already installed: $(task-master --version 2>/dev/null || true)"
+fi
 
 if [[ ! -x "$RECLAUDE_PATH" ]]; then
   echo "reclaude not found or not executable: $RECLAUDE_PATH" >&2

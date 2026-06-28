@@ -27,6 +27,7 @@
 - 直接把 `claude` 无条件指向 `reclaude` 会导致 ReClaude 内部同步递归并持续输出“同步配置…”。wrapper 已加入 `RECLAUDE_ALIAS_DEPTH` 保护，递归调用会落回 `claude-original`。
 - 新增 `scripts/bootstrap-reclaude-cloudcli-macos.sh`，用于新 Mac 一键 clone/pull、配置 ReClaude alias、安装 TaskMaster、启动 screen 服务并注册默认 admin。
 - 新增 Shell 移动端体验分析文档 `doc/2026-06-28-shell-mobile-ux-analysis.md`。
+- 真实重跑 bootstrap 时发现 `setup-taskmaster-reclaude.sh` 会重复执行全局 `npm install -g task-master-ai`。已改为当前 Node 下已有 `task-master` 和 `task-master-ai` 时跳过，必要时用 `FORCE_TASKMASTER_INSTALL=1` 强制重装。
 
 ## 新 Mac SSH 记录
 
