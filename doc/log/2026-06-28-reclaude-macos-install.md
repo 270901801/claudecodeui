@@ -31,6 +31,7 @@
 - raw GitHub 脚本下载本身也可能被网络卡住，文档补充 `HTTP_PROXY/HTTPS_PROXY` 用法。nvm 子脚本改为已安装目标 Node 时直接 `nvm use`，避免镜像源下重复解析 `22` 别名失败。
 - 中断过全局 TaskMaster 安装后，npm 可能在全局 node_modules 留下半截 `task-master-ai` 目录并报 `ENOTEMPTY rename`。安装脚本新增失败后定向清理 `task-master-ai` 残留并重试。
 - 新 Mac Shell 复现发现 plain shell 正常，但 Claude provider 直启 `/Users/apple/.local/bin/reclaude` 会卡在“同步配置…”。原因是它绕过 `claude` wrapper，未设置 `RECLAUDE_ALIAS_DEPTH`。服务端 Shell WebSocket 已在 Claude provider 启动 reclaude 时注入该变量。
+- 继续诊断时误把 Claude Code TUI 的 `Not logged in` 当成 ReClaude 未登录，并误执行 `reclaude logout --help`；该命令实际执行 logout，导致 `~/.reclaude/device.json` 被删、daemon 被停。已从 keychain 设备密钥派生出的 fingerprint 恢复 `device.json`，重启后 `reclaude status` 回到 `daemon_running=true`。文档已补充：不要用 `logout --help` 探测命令，SSH 下 `reclaude login` 可能因 keychain `User interaction is not allowed` 失败。
 
 ## 新 Mac SSH 记录
 

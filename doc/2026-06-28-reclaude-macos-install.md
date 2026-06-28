@@ -115,6 +115,33 @@ claude mcp list
 
 CloudCLI Shell 还有一个独立路径：如果 Claude provider 直接执行 `CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude`，它不会经过 `claude` wrapper，也就不会自动设置 `RECLAUDE_ALIAS_DEPTH`。服务端 Shell WebSocket 已在 Claude provider 启动 `reclaude` 时补上 `RECLAUDE_ALIAS_DEPTH=1`，否则 Shell 会一直卡在“同步配置…”。
 
+注意区分两种登录态：
+
+- ReClaude 账号态：`~/.reclaude/device.json` + macOS keychain 里的 `Claude Code-device-key`，用于 ReClaude daemon 和拼车网关。
+- Claude Code OAuth 态：`~/.claude/.credentials.json`，Claude Code CLI 自己会用它判断是否显示 `Not logged in`。
+
+不要把 Claude Code TUI 底部的 `Not logged in` 直接等同于 ReClaude 未登录。诊断时先看 `reclaude status`，再看 `~/.reclaude/device.json` 是否存在。
+
+危险命令：
+
+```bash
+reclaude logout --help
+```
+
+`reclaude logout` 不支持 `--help`，上面这条会实际执行 logout，停掉 daemon 并删除 `~/.reclaude/device.json`。需要帮助信息时只运行：
+
+```bash
+reclaude
+```
+
+如果在 SSH 里重跑 `reclaude login`，即使网页授权成功，也可能因为 macOS keychain 不允许非 GUI 交互写入而失败：
+
+```text
+security: SecKeychainItemCreateFromContent (<default>): User interaction is not allowed.
+```
+
+这种场景不要反复网页登录。优先在新 Mac 本机图形终端里执行 `reclaude login`，或从现有 keychain 设备密钥恢复 `device.json` 后再 `reclaude stop && reclaude`。
+
 ## 坑 1：Shell 入口仍调用 claude
 
 现象：普通聊天已经能通过 `reclaude` 发消息，但 Shell/恢复会话入口仍执行 `claude --resume ...`。
