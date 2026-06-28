@@ -16,6 +16,7 @@
 - `reclaude` 可执行文件位于 `~/.local/bin/reclaude`
 - npm 插件安装 registry 使用 `https://registry.npmjs.org/`
 - Web 形态建议设置 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`，避免源码安装时卡在 Electron 下载
+- 国内网络或新 Mac 首装时，建议显式配置 npm registry、nvm Node 镜像和本机代理
 
 ## 启动方式
 
@@ -30,14 +31,30 @@ chmod +x scripts/start-reclaude-cloudcli.sh scripts/setup-taskmaster-reclaude.sh
 PORT=3002 ./scripts/start-reclaude-cloudcli.sh
 ```
 
+国内网络推荐启动方式：
+
+```bash
+USE_LOCAL_PROXY=1 \
+NODE_MIRROR=https://npmmirror.com/mirrors/node \
+NPM_REGISTRY=https://registry.npmmirror.com/ \
+./scripts/setup-taskmaster-reclaude.sh
+
+USE_LOCAL_PROXY=1 \
+NODE_MIRROR=https://npmmirror.com/mirrors/node \
+NPM_REGISTRY=https://registry.npmmirror.com/ \
+PORT=3002 ./scripts/start-reclaude-cloudcli.sh
+```
+
 启动脚本会设置：
 
 ```text
 CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude
-CLOUDCLI_PLUGIN_NPM_REGISTRY=https://registry.npmjs.org/
-npm_config_registry=https://registry.npmjs.org/
+CloudCLI 插件 registry 跟随 NPM_REGISTRY 或 CLOUDCLI_PLUGIN_NPM_REGISTRY
+npm_config_registry 跟随 NPM_REGISTRY
 ELECTRON_SKIP_BINARY_DOWNLOAD=1
 ```
+
+`USE_LOCAL_PROXY=1` 会自动探测 `127.0.0.1:7897` 和 `127.0.0.1:7890`，适配 Clash Verge/ClashX 常见端口。
 
 ## 坑 1：Shell 入口仍调用 claude
 
@@ -77,6 +94,34 @@ ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 如果以后要打包桌面版，再显式关闭这个环境变量并重新安装依赖。
 
+## 坑 2.6：git 配了代理，但 npm/curl 仍然直连
+
+现象：新 Mac 上 `git config --global http.proxy` 已经指向 `127.0.0.1:7890`，但 `npm install -g task-master-ai` 仍然十几分钟不结束。
+
+原因：git 的 proxy 配置只影响 git，不会自动传给 npm、curl、nvm 或 npm 包的 postinstall 下载脚本。实测新 Mac 直连官方 npm 包时 SSL 超时：
+
+```text
+https://registry.npmjs.org/figlet/-/figlet-1.11.0.tgz -> SSL connection timeout
+https://registry.npmmirror.com/figlet/-/figlet-1.11.0.tgz -> 1.47s
+```
+
+修复：不要只等下载，直接给安装命令配置镜像和本机代理：
+
+```bash
+USE_LOCAL_PROXY=1 \
+NODE_MIRROR=https://npmmirror.com/mirrors/node \
+NPM_REGISTRY=https://registry.npmmirror.com/ \
+./scripts/setup-taskmaster-reclaude.sh
+```
+
+如果要继续使用官方 npm registry，也要显式走本机代理：
+
+```bash
+LOCAL_PROXY_URL=http://127.0.0.1:7897 \
+NPM_REGISTRY=https://registry.npmjs.org/ \
+./scripts/setup-taskmaster-reclaude.sh
+```
+
 ## 坑 3：TaskMaster 已安装但 UI 仍提示未安装
 
 现象：用户确认装过 `task-master-ai`，但设置页仍提示未安装。
@@ -93,6 +138,12 @@ task-master --version
 ```bash
 nvm use 22
 npm install -g task-master-ai --registry=https://registry.npmjs.org/
+```
+
+国内网络可改为：
+
+```bash
+NPM_REGISTRY=https://registry.npmmirror.com/ USE_LOCAL_PROXY=1 ./scripts/setup-taskmaster-reclaude.sh
 ```
 
 然后通过 `reclaude` 添加 MCP：

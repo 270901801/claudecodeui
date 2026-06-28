@@ -4,6 +4,27 @@ set -euo pipefail
 NODE_VERSION="${NODE_VERSION:-22}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmjs.org/}"
 RECLAUDE_PATH="${CLAUDE_CLI_PATH:-$HOME/.local/bin/reclaude}"
+NODE_MIRROR="${NODE_MIRROR:-${NVM_NODEJS_ORG_MIRROR:-}}"
+LOCAL_PROXY_URL="${LOCAL_PROXY_URL:-}"
+
+if [[ "${USE_LOCAL_PROXY:-0}" == "1" && -z "$LOCAL_PROXY_URL" ]]; then
+  for proxy_port in 7897 7890; do
+    if command -v nc >/dev/null 2>&1 && nc -z 127.0.0.1 "$proxy_port" >/dev/null 2>&1; then
+      LOCAL_PROXY_URL="http://127.0.0.1:${proxy_port}"
+      break
+    fi
+  done
+fi
+
+if [[ -n "$LOCAL_PROXY_URL" ]]; then
+  export HTTP_PROXY="${HTTP_PROXY:-$LOCAL_PROXY_URL}"
+  export HTTPS_PROXY="${HTTPS_PROXY:-$LOCAL_PROXY_URL}"
+  export NO_PROXY="${NO_PROXY:-127.0.0.1,localhost}"
+fi
+
+if [[ -n "$NODE_MIRROR" ]]; then
+  export NVM_NODEJS_ORG_MIRROR="$NODE_MIRROR"
+fi
 
 if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   # shellcheck source=/dev/null
@@ -12,6 +33,7 @@ if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   nvm use "$NODE_VERSION" >/dev/null
 fi
 
+export npm_config_registry="$NPM_REGISTRY"
 npm install -g task-master-ai --registry="$NPM_REGISTRY"
 
 if [[ ! -x "$RECLAUDE_PATH" ]]; then

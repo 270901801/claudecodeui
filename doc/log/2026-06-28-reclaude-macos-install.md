@@ -13,6 +13,16 @@
 5. 新增 `scripts/setup-taskmaster-reclaude.sh`。
 6. 新增安装排坑文档 `doc/2026-06-28-reclaude-macos-install.md`。
 7. Web 启动脚本默认设置 `ELECTRON_SKIP_BINARY_DOWNLOAD=1`，规避 Web 形态源码安装时 Electron 下载超时。
+8. 远程新 Mac 诊断发现 git 配了代理但 npm 未配代理或镜像；脚本新增 `USE_LOCAL_PROXY`、`LOCAL_PROXY_URL`、`NODE_MIRROR`、`NPM_REGISTRY`，用于国内网络下快速安装。
+
+## 新 Mac 实测
+
+- 直连 `registry.npmjs.org` 下载 npm 包出现 SSL timeout。
+- `registry.npmmirror.com` 下载同一包约 1.47 秒。
+- 走本机 Clash 端口 `127.0.0.1:7897` 或 `127.0.0.1:7890` 访问官方 npm 可以恢复到约 1.5 秒。
+- 使用 `NPM_REGISTRY=https://registry.npmmirror.com/` 和 `USE_LOCAL_PROXY=1` 后，`task-master-ai@0.43.1` 在约 3 分钟内完成全局安装。
+- `reclaude mcp list` 已显示 `task-master-ai` connected。
+- 新 Mac 上 CloudCLI Web 已在 `3002` 端口启动，`/api/taskmaster/installation-status` 返回 `isReady=true`。
 
 ## 新 Mac SSH 记录
 
