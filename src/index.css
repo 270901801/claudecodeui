@@ -617,6 +617,15 @@
       user-select: text !important;
       -webkit-touch-callout: default !important;
     }
+
+    /* Allow the terminal viewport to scroll on touch. The JS touch handler in
+       useShellTerminal drives scrollLines(), but keeping the viewport itself
+       scrollable (pan-y + momentum) lets native scrolling work as a fallback. */
+    .xterm .xterm-viewport {
+      overflow-y: auto !important;
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
     
     /* Fix mobile scrolling */
     .overflow-y-auto {

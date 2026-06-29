@@ -1,4 +1,24 @@
 {
+  "outline": {
+    "title": "Conversation outline",
+    "close": "Close",
+    "loading": "Loading…",
+    "error": "Failed to load the outline.",
+    "empty": "No messages from you yet.",
+    "untitled": "(no text)",
+    "question": "#{{n}}"
+  },
+  "aiQuota": {
+    "title": "AI quota",
+    "refresh": "Refresh",
+    "loading": "Loading…",
+    "empty": "No quota data.",
+    "error": "Failed to load AI quota.",
+    "notConfigured": "AI quota is not configured. Set PERSONALOS_API_KEY in the server .env.",
+    "noWindows": "No usage windows reported.",
+    "resetsNow": "resetting",
+    "daysLeft": "{{n}}d left"
+  },
   "codeBlock": {
     "copy": "Copy",
     "copied": "Copied",

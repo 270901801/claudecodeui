@@ -155,14 +155,23 @@ async function handleChatSend(
   const clientOptions = (data.options ?? {}) as AnyRecord;
   const command = typeof data.content === 'string' ? data.content : '';
 
+  // A forked session has no provider id of its own yet, but carries the parent's
+  // provider id in `parent_session_id`. On its first message we resume from the
+  // parent transcript with `forkSession` so the SDK branches a fresh session id
+  // (capturing it below) instead of appending to the parent. Once the fork has
+  // its own provider id, this branch no longer applies and it resumes normally.
+  const isForkFirstMessage = !session.provider_session_id && Boolean(session.parent_session_id);
+  const resumeTargetId = session.provider_session_id ?? (isForkFirstMessage ? session.parent_session_id : null);
+
   // The provider runtimes receive the provider-native session id (that is the
   // id their CLI/SDK understands for resume). Brand-new sessions have no
   // provider id yet, so the runtime starts fresh and announces one, which the
   // gateway writer captures and maps back to the app session id.
   const runtimeOptions: AnyRecord = {
     ...clientOptions,
-    sessionId: session.provider_session_id ?? undefined,
-    resume: Boolean(session.provider_session_id),
+    sessionId: resumeTargetId ?? undefined,
+    resume: Boolean(resumeTargetId),
+    forkSession: isForkFirstMessage,
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
   };

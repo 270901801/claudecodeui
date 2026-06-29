@@ -129,6 +129,9 @@ export function useChatSessionState({
   const topLoadLockRef = useRef(false);
   const pendingScrollRestoreRef = useRef<ScrollRestoreState | null>(null);
   const pendingInitialScrollRef = useRef(true);
+  // True after the conversation-outline jump loads a middle window that is not
+  // the live tail, so "scroll to bottom" knows to re-fetch the latest page.
+  const jumpedAwayFromTailRef = useRef(false);
   const messagesOffsetRef = useRef(0);
   const scrollPositionRef = useRef({ height: 0, top: 0 });
   const loadAllFinishedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -173,9 +176,10 @@ export function useChatSessionState({
     setCurrentSessionId(null);
     setPendingUserMessage(null);
     messagesOffsetRef.current = 0;
+    jumpedAwayFromTailRef.current = false;
     setHasMoreMessages(false);
     setTotalMessages(0);
-    
+
     setTokenBudget(null);
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
     setAllMessagesLoaded(false);
@@ -306,14 +310,40 @@ export function useChatSessionState({
     container.scrollTop = container.scrollHeight;
   }, []);
 
-  const scrollToBottomAndReset = useCallback(() => {
+  const scrollToBottomAndReset = useCallback(async () => {
+    // After an outline jump loaded a middle window, the live tail is no longer
+    // in memory — re-fetch the latest page before scrolling so "back to latest"
+    // truly returns to the newest messages rather than the window's bottom.
+    if (jumpedAwayFromTailRef.current && selectedSession) {
+      try {
+        const slot = await sessionStore.fetchFromServer(selectedSession.id, {
+          limit: MESSAGES_PER_PAGE,
+          offset: 0,
+        });
+        if (slot) {
+          setHasMoreMessages(slot.hasMore);
+          setTotalMessages(slot.total);
+          messagesOffsetRef.current = slot.offset;
+        }
+      } catch {
+        // Fall through and scroll within whatever is loaded.
+      }
+      jumpedAwayFromTailRef.current = false;
+      setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
+      setAllMessagesLoaded(false);
+      allMessagesLoadedRef.current = false;
+      // Scroll after the tail renders.
+      requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom()));
+      return;
+    }
+
     scrollToBottom();
     if (allMessagesLoaded) {
       setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
       setAllMessagesLoaded(false);
       allMessagesLoadedRef.current = false;
     }
-  }, [allMessagesLoaded, scrollToBottom]);
+  }, [allMessagesLoaded, scrollToBottom, selectedSession, sessionStore]);
 
   const isNearBottom = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -483,6 +513,7 @@ export function useChatSessionState({
 
     // Reset pagination/scroll state
     messagesOffsetRef.current = 0;
+    jumpedAwayFromTailRef.current = false;
     setHasMoreMessages(false);
     setTotalMessages(0);
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
@@ -660,6 +691,117 @@ export function useChatSessionState({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatMessages.length, isLoadingSessionMessages, searchTarget]);
 
+  /**
+   * Jumps to a conversation-outline entry (a user message anywhere in the
+   * session), lazily loading just a small window around it when it is not
+   * already in memory — never the whole transcript.
+   *
+   * Window math uses the "offset counted from the newest end" pagination of the
+   * messages endpoint: a message at displayable index `i` of `total` sits at
+   * `total - 1 - i` from the end, so loading `[ABOVE..BELOW]` around it means
+   * `offset = total - index - BELOW - 1`, `limit = ABOVE + BELOW + 1`.
+   */
+  const navigateToOutlineEntry = useCallback(
+    async (entry: { id?: string; index: number; timestamp?: string; total?: number }) => {
+      const sessionId = selectedSession?.id;
+      if (!sessionId) return;
+
+      // Suppress the auto initial-scroll-to-bottom while we position the view.
+      searchScrollActiveRef.current = true;
+
+      const findAndScroll = (retriesLeft: number) => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+          searchScrollActiveRef.current = false;
+          return;
+        }
+
+        let targetElement: Element | null = null;
+        if (entry.id) {
+          try {
+            targetElement = container.querySelector(`[data-message-id="${entry.id}"]`);
+          } catch {
+            targetElement = null;
+          }
+        }
+        if (!targetElement && entry.timestamp) {
+          const targetDate = new Date(entry.timestamp).getTime();
+          let closestDiff = Infinity;
+          container.querySelectorAll('[data-message-timestamp]').forEach((el) => {
+            const ts = el.getAttribute('data-message-timestamp');
+            if (!ts) return;
+            const diff = Math.abs(new Date(ts).getTime() - targetDate);
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              targetElement = el;
+            }
+          });
+        }
+
+        if (targetElement) {
+          const el = targetElement as Element;
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          el.classList.add('search-highlight-flash');
+          setTimeout(() => el.classList.remove('search-highlight-flash'), 4000);
+          // Mark the view as "scrolled up" (viewing history) and keep the
+          // on-message autoscroll suppressed until the smooth scroll settles —
+          // otherwise it fires while we land on the target (especially when the
+          // target sits near the bottom of a small loaded window) and yanks the
+          // view straight back down to the latest message.
+          setIsUserScrolledUp(true);
+          setTimeout(() => {
+            searchScrollActiveRef.current = false;
+            // Re-assert after the smooth scroll ends: handleScroll may have
+            // flipped this to false mid-animation, but we want auto-scroll to
+            // stay off and the "back to latest" control to remain available on
+            // the target — especially after a deep jump away from the tail.
+            setIsUserScrolledUp(true);
+          }, 1200);
+        } else if (retriesLeft > 0) {
+          setTimeout(() => findAndScroll(retriesLeft - 1), 200);
+        } else {
+          searchScrollActiveRef.current = false;
+        }
+      };
+
+      // Already loaded → just expand the visible window and scroll, no fetch.
+      const alreadyLoaded = chatMessages.some(
+        (m) =>
+          (entry.id && (m.id as string | undefined) === entry.id) ||
+          (entry.timestamp && String(m.timestamp) === entry.timestamp),
+      );
+      if (alreadyLoaded) {
+        setVisibleMessageCount(Infinity);
+        setTimeout(() => findAndScroll(15), 100);
+        return;
+      }
+
+      // Lazily load a small window around the target via offset pagination.
+      const total = entry.total ?? totalMessages ?? 0;
+      const ABOVE = 30;
+      const BELOW = 10;
+      const limit = ABOVE + BELOW + 1;
+      const offset = total > 0 ? Math.max(0, total - entry.index - BELOW - 1) : 0;
+      try {
+        const slot = await sessionStore.fetchFromServer(sessionId, { limit, offset });
+        if (slot) {
+          setHasMoreMessages(slot.hasMore);
+          setTotalMessages(slot.total);
+          messagesOffsetRef.current = slot.offset;
+          setVisibleMessageCount(Infinity);
+          // The loaded window is not the live tail (unless offset hit 0), so the
+          // "back to latest" control must re-fetch the newest page.
+          jumpedAwayFromTailRef.current = offset > 0;
+        }
+      } catch {
+        // Fall through and try to scroll within whatever is currently loaded.
+      }
+
+      setTimeout(() => findAndScroll(15), 150);
+    },
+    [chatMessages, selectedSession, sessionStore, totalMessages],
+  );
+
   // Initial token usage fetch for providers with file-backed usage data.
   useEffect(() => {
     if (!selectedProject || !selectedSession?.id) {
@@ -821,6 +963,7 @@ export function useChatSessionState({
     scrollContainerRef,
     scrollToBottom,
     scrollToBottomAndReset,
+    navigateToOutlineEntry,
     isNearBottom,
     handleScroll,
   };

@@ -63,6 +63,15 @@ export const api = {
   },
   projectTaskmaster: (projectId) =>
     authenticatedFetch(`/api/projects/${encodeURIComponent(projectId)}/taskmaster`),
+  // Live host CPU/memory/disk snapshot for the system resources panel.
+  systemMetrics: () => authenticatedFetch('/api/system/metrics'),
+  // Lightweight outline of the user's own messages for the whole session
+  // (table-of-contents). Returns { total, entries: [{ id, index, timestamp, preview }] }.
+  sessionOutline: (sessionId) =>
+    authenticatedFetch(`/api/providers/sessions/${encodeURIComponent(sessionId)}/outline`),
+  // AI quota snapshot proxied from personalOS. `refresh=true` forces a live scrape.
+  aiQuota: (refresh = false) =>
+    authenticatedFetch(`/api/ai-quota${refresh ? '?refresh=true' : ''}`),
   // Unified endpoint for persisted session messages.
   // Provider/project metadata are resolved by the backend from sessionId.
   unifiedSessionMessages: (sessionId, _provider = 'claude', { limit = null, offset = 0 } = {}) => {
@@ -108,6 +117,16 @@ export const api = {
     authenticatedFetch(`/api/providers/sessions/${sessionId}`, {
       method: 'PUT',
       body: JSON.stringify({ summary }),
+    }),
+  // Toggles the sidebar pin flag; response data => { sessionId, isPinned }.
+  toggleSessionPin: (sessionId) =>
+    authenticatedFetch(`/api/providers/sessions/${sessionId}/pin`, {
+      method: 'PUT',
+    }),
+  // Branches a new session from an existing one (Claude only); returns the new session metadata.
+  forkSession: (sessionId) =>
+    authenticatedFetch(`/api/providers/sessions/${sessionId}/fork`, {
+      method: 'POST',
     }),
   // `hardDelete` => server `?force=true` (remove DB row + Claude *.jsonl + sessions rows for path).
   deleteProject: (projectId, hardDelete = false) => {

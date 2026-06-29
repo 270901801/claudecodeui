@@ -190,6 +190,51 @@ export const sessionsService = {
   },
 
   /**
+   * Builds a lightweight outline of the user's own messages for the whole
+   * session, used by the conversation-outline (table-of-contents) panel.
+   *
+   * It reuses `fetchHistory(limit: null)` so it is provider-agnostic, but only
+   * the small user-message list crosses the wire — never the full transcript.
+   * `index` is the position in the displayable message list (the same
+   * coordinate space the paginated messages endpoint uses), so the client can
+   * compute a window offset to lazily load around any entry. `total` is the
+   * displayable message count.
+   */
+  async fetchSessionOutline(sessionId: string): Promise<{
+    total: number;
+    entries: Array<{ id: string; index: number; timestamp: string; preview: string }>;
+  }> {
+    const history = await this.fetchHistory(sessionId, { limit: null, offset: 0 });
+
+    const entries: Array<{ id: string; index: number; timestamp: string; preview: string }> = [];
+    history.messages.forEach((message, index) => {
+      if (message.role !== 'user' || message.kind === 'tool_result') {
+        return;
+      }
+
+      const rawText =
+        (typeof message.content === 'string' && message.content) ||
+        (typeof message.displayText === 'string' && message.displayText) ||
+        '';
+      // Collapse whitespace/newlines into a single trimmed line and cap length
+      // so the payload stays tiny even for long prompts.
+      const preview = rawText.replace(/\s+/g, ' ').trim().slice(0, 140);
+
+      entries.push({
+        id: message.id,
+        index,
+        timestamp: message.timestamp,
+        preview,
+      });
+    });
+
+    return {
+      total: history.total,
+      entries,
+    };
+  },
+
+  /**
    * Returns archived sessions with enough project metadata for the sidebar to
    * group, filter, open, and restore them without a per-row follow-up query.
    */
@@ -304,5 +349,87 @@ export const sessionsService = {
 
     sessionsDb.updateSessionCustomName(sessionId, summary);
     return { sessionId, summary };
+  },
+
+  /**
+   * Flips the sidebar pin flag for one session and returns the new state.
+   * Mirrors `toggleProjectStar` so pinned sessions can sort to the top.
+   */
+  toggleSessionPin(sessionId: string): { sessionId: string; isPinned: boolean } {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      throw new AppError(`Session "${sessionId}" was not found.`, {
+        code: 'SESSION_NOT_FOUND',
+        statusCode: 404,
+      });
+    }
+
+    const nextPinned = !Boolean(session.isPinned);
+    sessionsDb.updateSessionIsPinned(sessionId, nextPinned);
+    return { sessionId, isPinned: nextPinned };
+  },
+
+  /**
+   * Creates a branch session from an existing one.
+   *
+   * Only Claude is supported natively: the Claude Agent SDK can `resume` the
+   * parent transcript with `forkSession: true`, which branches a fresh session
+   * id from the parent's history without mutating the original. Other providers
+   * have no native fork yet, so they are rejected with a clear message; the
+   * provider check is the extension point for per-provider strategies later.
+   *
+   * The new row is created up-front with `parent_session_id` pointing at the
+   * parent's provider-native id. The actual SDK fork happens lazily on the
+   * first message of the new session (see claude-sdk buildSdkOptions).
+   */
+  forkSession(sessionId: string): {
+    sessionId: string;
+    provider: LLMProvider;
+    projectPath: string | null;
+    parentSessionId: string;
+    parentProviderSessionId: string | null;
+    customName: string;
+  } {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      throw new AppError(`Session "${sessionId}" was not found.`, {
+        code: 'SESSION_NOT_FOUND',
+        statusCode: 404,
+      });
+    }
+
+    if (session.provider !== 'claude') {
+      throw new AppError('Forking is currently only supported for Claude sessions.', {
+        code: 'FORK_UNSUPPORTED_PROVIDER',
+        statusCode: 400,
+      });
+    }
+
+    if (!session.project_path) {
+      throw new AppError('Cannot fork a session without a project path.', {
+        code: 'SESSION_PROJECT_PATH_MISSING',
+        statusCode: 400,
+      });
+    }
+
+    const baseName = session.custom_name?.trim() || session.session_id;
+    const customName = `${baseName} (fork)`;
+    const newSessionId = randomUUID();
+
+    sessionsDb.createAppSession(newSessionId, session.provider, session.project_path, {
+      customName,
+      // Resume target for the SDK fork: prefer the provider-native id, falling
+      // back to the parent app id for sessions discovered directly on disk.
+      parentSessionId: session.provider_session_id ?? session.session_id,
+    });
+
+    return {
+      sessionId: newSessionId,
+      provider: session.provider as LLMProvider,
+      projectPath: session.project_path,
+      parentSessionId: session.session_id,
+      parentProviderSessionId: session.provider_session_id,
+      customName,
+    };
   },
 };

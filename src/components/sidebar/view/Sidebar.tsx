@@ -101,6 +101,8 @@ function Sidebar({
     restoreArchivedSession,
     refreshProjects,
     updateSessionSummary,
+    toggleSessionPin,
+    forkSession,
     collapseSidebar: handleCollapseSidebar,
     expandSidebar: handleExpandSidebar,
     setShowNewProject,
@@ -177,6 +179,12 @@ function Sidebar({
     onDeleteProject: requestProjectDelete,
     onSessionSelect: handleSessionClick,
     onDeleteSession: showDeleteSessionConfirmation,
+    onTogglePinSession: (sessionId: string) => {
+      void toggleSessionPin(sessionId);
+    },
+    onForkSession: (sessionId: string, projectId: string, provider: LLMProvider) => {
+      void forkSession(sessionId, projectId, provider);
+    },
     onLoadMoreSessions: loadMoreSessionsForProject,
     onNewSession,
     onEditingSessionNameChange: setEditingSessionName,

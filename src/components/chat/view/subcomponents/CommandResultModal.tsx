@@ -566,6 +566,7 @@ function CostContent({ data }: { data: CostCommandData }) {
 
 function StatusContent({ data }: { data: StatusCommandData }) {
   const memoryRssMb = data.memoryUsage?.rssMb;
+  const system = data.systemMetrics;
   const rows = [
     { label: 'Package', value: data.packageName || 'claude-code-ui', icon: Package },
     { label: 'Version', value: data.version || 'Unknown', icon: BadgeCheck, tone: 'success' as const },
@@ -576,6 +577,20 @@ function StatusContent({ data }: { data: StatusCommandData }) {
     { label: 'Platform', value: data.platform || 'Unknown', icon: Activity },
     { label: 'Memory', value: typeof memoryRssMb === 'number' ? `${memoryRssMb} MB RSS` : 'Unknown', icon: Gauge },
   ];
+
+  if (system) {
+    if (typeof system.cpuLoadPercent === 'number') {
+      const cores = system.cpuCores ? ` (${system.cpuCores} cores)` : '';
+      rows.push({ label: 'CPU', value: `${system.cpuLoadPercent}%${cores}`, icon: Cpu });
+    }
+    if (typeof system.memoryUsePercent === 'number') {
+      rows.push({ label: 'System RAM', value: `${system.memoryUsedMb ?? '?'} / ${system.memoryTotalMb ?? '?'} MB (${system.memoryUsePercent}%)`, icon: Gauge });
+    }
+    if (system.primaryDisk && typeof system.primaryDisk.usePercent === 'number') {
+      const disk = system.primaryDisk;
+      rows.push({ label: 'Disk', value: `${disk.usedGb ?? '?'} / ${disk.totalGb ?? '?'} GB (${disk.usePercent}%)`, icon: Activity });
+    }
+  }
 
   return (
     <div className="space-y-4">

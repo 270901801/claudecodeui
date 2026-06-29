@@ -401,6 +401,21 @@ const addProviderSessionIdMapping = (db: Database): void => {
   `);
 };
 
+/**
+ * Adds sidebar pinning (`isPinned`) and fork lineage (`parent_session_id`)
+ * columns to sessions. Re-reads the table info so it is correct whether the
+ * sessions table was just rebuilt with the hardcoded schema above or carried
+ * over from an older install. Idempotent.
+ */
+const addSessionPinAndForkColumns = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'isPinned', 'BOOLEAN DEFAULT 0');
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'parent_session_id', 'TEXT');
+  db.exec('UPDATE sessions SET isPinned = COALESCE(isPinned, 0)');
+};
+
 const ensureProjectsForSessionPaths = (db: Database): void => {
   if (!tableExists(db, 'sessions')) {
     return;
@@ -448,12 +463,14 @@ export const runMigrations = (db: Database) => {
     rebuildSessionsTableWithProjectSchema(db);
     migrateLegacySessionNames(db);
     addProviderSessionIdMapping(db);
+    addSessionPinAndForkColumns(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_project_path ON sessions(project_path)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_is_archived ON sessions(isArchived)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_is_pinned ON sessions(isPinned)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_starred ON projects(isStarred)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_projects_is_archived ON projects(isArchived)');
 

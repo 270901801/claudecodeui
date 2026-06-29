@@ -918,6 +918,70 @@ export function useSidebarController({
     [onRefresh, t],
   );
 
+  const toggleSessionPin = useCallback(
+    async (sessionId: string) => {
+      try {
+        const response = await api.toggleSessionPin(sessionId);
+        if (response.ok) {
+          // The DB sorts pinned sessions first, so a refresh reorders the list.
+          await onRefresh();
+        } else {
+          console.error('[Sidebar] Failed to pin session:', response.status);
+          alert(t('messages.pinSessionError', 'Error updating session pin. Please try again.'));
+        }
+      } catch (error) {
+        console.error('[Sidebar] Error pinning session:', error);
+        alert(t('messages.pinSessionError', 'Error updating session pin. Please try again.'));
+      }
+    },
+    [onRefresh, t],
+  );
+
+  const forkSession = useCallback(
+    async (sessionId: string, projectId: string, provider: LLMProvider) => {
+      try {
+        const response = await api.forkSession(sessionId);
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as {
+            error?: string | { message?: string };
+          };
+          const err = payload.error;
+          const message =
+            typeof err === 'string'
+              ? err
+              : err && typeof err === 'object' && err.message
+                ? err.message
+                : t('messages.forkSessionError', 'Error forking session. Please try again.');
+          alert(message);
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          data?: { sessionId?: string; customName?: string };
+        };
+        const newSessionId = payload.data?.sessionId;
+
+        // Refresh so the new branch row is present, then open it. Its history is
+        // empty until the first message triggers the SDK fork from the parent.
+        await onRefresh();
+
+        if (newSessionId) {
+          onSessionSelect({
+            id: newSessionId,
+            summary: payload.data?.customName ?? '',
+            provider,
+            __provider: provider,
+            __projectId: projectId,
+          });
+        }
+      } catch (error) {
+        console.error('[Sidebar] Error forking session:', error);
+        alert(t('messages.forkSessionError', 'Error forking session. Please try again.'));
+      }
+    },
+    [onRefresh, onSessionSelect, t],
+  );
+
   const collapseSidebar = useCallback(() => {
     setSidebarVisible(false);
   }, [setSidebarVisible]);
@@ -969,6 +1033,8 @@ export function useSidebarController({
     restoreArchivedSession,
     refreshProjects,
     updateSessionSummary,
+    toggleSessionPin,
+    forkSession,
     collapseSidebar,
     expandSidebar,
     setShowNewProject,

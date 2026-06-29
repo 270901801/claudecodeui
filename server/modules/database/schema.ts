@@ -93,6 +93,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     project_path TEXT,
     jsonl_path TEXT,
     isArchived BOOLEAN DEFAULT 0,
+    -- Sidebar pinning: pinned sessions sort above the rest within their project.
+    isPinned BOOLEAN DEFAULT 0,
+    -- Fork lineage: app session_id this session was forked from (NULL if original).
+    parent_session_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (session_id),

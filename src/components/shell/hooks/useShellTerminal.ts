@@ -135,6 +135,65 @@ export function useShellTerminal({
 
     terminalContainerRef.current.addEventListener('copy', handleTerminalCopy);
 
+    // Touch scrolling: xterm.js does not translate touch drags into viewport
+    // scrolls on its own (the gesture is swallowed by its text-selection layer),
+    // so mobile users cannot scroll back through history. We translate a
+    // single-finger drag into terminal.scrollLines() ourselves. A small movement
+    // threshold keeps taps and long-press selection working untouched.
+    const TOUCH_SCROLL_THRESHOLD_PX = 8;
+    let touchStartY = 0;
+    let lastTouchY = 0;
+    let touchAccum = 0;
+    let touchScrolling = false;
+
+    const getRowHeightPx = () => {
+      const viewport = nextTerminal.element?.querySelector<HTMLElement>('.xterm-viewport');
+      const rows = nextTerminal.rows || 1;
+      if (viewport && viewport.clientHeight > 0) {
+        return viewport.clientHeight / rows;
+      }
+      return 17;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+      touchStartY = event.touches[0].clientY;
+      lastTouchY = touchStartY;
+      touchAccum = 0;
+      touchScrolling = false;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+      const currentY = event.touches[0].clientY;
+      const deltaY = lastTouchY - currentY;
+      lastTouchY = currentY;
+
+      if (!touchScrolling && Math.abs(currentY - touchStartY) < TOUCH_SCROLL_THRESHOLD_PX) {
+        return;
+      }
+      touchScrolling = true;
+
+      touchAccum += deltaY;
+      const rowHeight = getRowHeightPx();
+      if (rowHeight <= 0) {
+        return;
+      }
+      const lines = Math.trunc(touchAccum / rowHeight);
+      if (lines !== 0) {
+        nextTerminal.scrollLines(lines);
+        touchAccum -= lines * rowHeight;
+      }
+    };
+
+    const touchTarget = terminalContainerRef.current;
+    touchTarget.addEventListener('touchstart', handleTouchStart, { passive: true });
+    touchTarget.addEventListener('touchmove', handleTouchMove, { passive: true });
+
     nextTerminal.attachCustomKeyEventHandler((event) => {
       const activeAuthUrl = isCodexLoginCommand(initialCommandRef.current)
         ? CODEX_DEVICE_AUTH_URL
@@ -244,6 +303,8 @@ export function useShellTerminal({
 
     return () => {
       terminalContainerRef.current?.removeEventListener('copy', handleTerminalCopy);
+      touchTarget.removeEventListener('touchstart', handleTouchStart);
+      touchTarget.removeEventListener('touchmove', handleTouchMove);
       resizeObserver.disconnect();
       if (resizeTimeoutRef.current !== null) {
         window.clearTimeout(resizeTimeoutRef.current);

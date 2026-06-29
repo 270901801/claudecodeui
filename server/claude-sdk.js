@@ -151,7 +151,7 @@ function matchesToolPermission(entry, toolName, input) {
  * @returns {Object} SDK-compatible options
  */
 function mapCliOptionsToSDK(options = {}) {
-  const { sessionId, cwd, toolsSettings, permissionMode } = options;
+  const { sessionId, cwd, toolsSettings, permissionMode, forkSession } = options;
 
   const sdkOptions = {};
 
@@ -225,6 +225,13 @@ function mapCliOptionsToSDK(options = {}) {
   // Map resume session
   if (sessionId) {
     sdkOptions.resume = sessionId;
+
+    // Fork: branch a new session id from the resumed transcript instead of
+    // continuing it, so the original session stays untouched. Set by the chat
+    // gateway only on the first message of a forked session.
+    if (forkSession) {
+      sdkOptions.forkSession = true;
+    }
   }
 
   return sdkOptions;
@@ -513,8 +520,13 @@ async function loadMcpConfig(cwd) {
  * @returns {Promise<void>}
  */
 async function queryClaudeSDK(command, options = {}, ws) {
-  const { sessionId, sessionSummary } = options;
-  let capturedSessionId = sessionId;
+  const { sessionId, sessionSummary, forkSession } = options;
+  // On a fork we pass the parent id as the SDK `resume` target, but the SDK
+  // branches a brand-new session id. Start `capturedSessionId` empty so that
+  // new id is captured below (and mapped to the app session) instead of being
+  // shadowed by the parent's id, which would route the fork's transcript onto
+  // the parent.
+  let capturedSessionId = forkSession ? null : sessionId;
   let sessionCreatedSent = false;
   let tempImagePaths = [];
   let tempDir = null;
@@ -697,8 +709,10 @@ async function queryClaudeSDK(command, options = {}, ws) {
           ws.setSessionId(capturedSessionId);
         }
 
-        // Send session-created event only once for new sessions
-        if (!sessionId && !sessionCreatedSent) {
+        // Send session-created event once for new sessions, including forks
+        // (a fork has a parent `sessionId` but still mints a fresh id that must
+        // be mapped to the new app session).
+        if ((!sessionId || forkSession) && !sessionCreatedSent) {
           sessionCreatedSent = true;
           ws.send(createNormalizedMessage({ kind: 'session_created', newSessionId: capturedSessionId, sessionId: capturedSessionId, provider: 'claude' }));
         }

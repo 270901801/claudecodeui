@@ -301,7 +301,9 @@ export default function Shell({
         disableRestart={isRestarting || !isInitialized}
       />
 
-      <div className="relative flex-1 overflow-hidden p-2">
+      {/* Extra bottom padding on mobile keeps the last terminal rows clear of the
+          floating TerminalShortcutsPanel (md:hidden) so fit() never hides them. */}
+      <div className="relative flex-1 overflow-hidden p-2 pb-16 md:pb-2">
         <div
           ref={terminalContainerRef}
           className="h-full w-full focus:outline-none"

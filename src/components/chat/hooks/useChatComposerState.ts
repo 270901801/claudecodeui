@@ -120,6 +120,19 @@ export type StatusCommandData = {
     heapUsedMb?: number;
     heapTotalMb?: number;
   };
+  systemMetrics?: {
+    cpuLoadPercent?: number;
+    cpuCores?: number;
+    memoryTotalMb?: number;
+    memoryUsedMb?: number;
+    memoryUsePercent?: number;
+    primaryDisk?: {
+      mount?: string;
+      usePercent?: number;
+      totalGb?: number;
+      usedGb?: number;
+    } | null;
+  } | null;
 };
 
 export type HelpCommandData = {

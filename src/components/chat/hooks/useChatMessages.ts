@@ -39,6 +39,9 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
 
   for (const msg of messages) {
     const sharedMetadata = {
+      // Carry the normalized message id through so the DOM can expose it as a
+      // stable jump anchor (data-message-id) for the conversation outline.
+      id: msg.id,
       displayText: msg.displayText,
       commandName: msg.commandName,
       commandMessage: msg.commandMessage,

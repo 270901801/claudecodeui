@@ -15,17 +15,21 @@ import type {
 } from '../types';
 import QuickSettingsSection from './QuickSettingsSection';
 import QuickSettingsToggleRow from './QuickSettingsToggleRow';
+import SystemResourcesSection from './SystemResourcesSection';
 
 type QuickSettingsContentProps = {
   isDarkMode: boolean;
   preferences: QuickSettingsPreferences;
   onPreferenceChange: (key: PreferenceToggleKey, value: boolean) => void;
+  // True while the panel is open, so the resources section only polls when visible.
+  isActive: boolean;
 };
 
 export default function QuickSettingsContent({
   isDarkMode,
   preferences,
   onPreferenceChange,
+  isActive,
 }: QuickSettingsContentProps) {
   const { t } = useTranslation('settings');
   const inputSettingToggles = preferences.voiceEnabled
@@ -46,6 +50,8 @@ export default function QuickSettingsContent({
 
   return (
     <div className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden bg-background p-4">
+      <SystemResourcesSection isActive={isActive} />
+
       <QuickSettingsSection title={t('quickSettings.sections.appearance')}>
         <div className={SETTING_ROW_CLASS}>
           <span className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">

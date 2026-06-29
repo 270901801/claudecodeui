@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Check, Edit2, Loader2, Trash2, X } from 'lucide-react';
+import { Check, Edit2, GitFork, Loader2, Pin, PinOff, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Badge, Button, Tooltip } from '../../../../shared/view/ui';
@@ -29,6 +29,8 @@ type SidebarSessionItemProps = {
     sessionTitle: string,
     provider: LLMProvider,
   ) => void;
+  onTogglePinSession: (sessionId: string) => void;
+  onForkSession: (sessionId: string, projectId: string, provider: LLMProvider) => void;
   t: TFunction;
 };
 
@@ -75,11 +77,16 @@ export default function SidebarSessionItem({
   onProjectSelect,
   onSessionSelect,
   onDeleteSession,
+  onTogglePinSession,
+  onForkSession,
   t,
 }: SidebarSessionItemProps) {
   const sessionView = createSessionViewModel(session, currentTime, t);
   const isSelected = selectedSession?.id === session.id;
   const isEditing = editingSession === session.id;
+  const isPinned = Boolean(session.isPinned);
+  // Forking branches from existing history; only Claude supports it natively today.
+  const canFork = session.__provider === 'claude';
   const compactSessionAge = formatCompactSessionAge(sessionView.sessionTime, currentTime);
   const editingContainerRef = useRef<HTMLDivElement>(null);
   const showRecentIndicator = !isProcessing && sessionView.isActive;
@@ -157,6 +164,9 @@ export default function SidebarSessionItem({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
+                {isPinned && (
+                  <Pin className="h-3 w-3 flex-shrink-0 text-amber-500 dark:text-amber-400" aria-label={t('tooltips.pinnedSession', 'Pinned')} />
+                )}
                 <div className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span className="ml-auto flex-shrink-0">
@@ -219,6 +229,9 @@ export default function SidebarSessionItem({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
+                {isPinned && (
+                  <Pin className="h-3 w-3 flex-shrink-0 text-amber-500 dark:text-amber-400" aria-label={t('tooltips.pinnedSession', 'Pinned')} />
+                )}
                 <div className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span
@@ -299,6 +312,37 @@ export default function SidebarSessionItem({
               </>
             ) : (
               <>
+                <button
+                  className={cn(
+                    'flex h-6 w-6 items-center justify-center rounded',
+                    isPinned
+                      ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/30 dark:hover:bg-amber-900/50'
+                      : 'bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40',
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onTogglePinSession(session.id);
+                  }}
+                  title={isPinned ? t('tooltips.unpinSession', 'Unpin session') : t('tooltips.pinSession', 'Pin session')}
+                >
+                  {isPinned ? (
+                    <PinOff className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                  ) : (
+                    <Pin className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                  )}
+                </button>
+                {canFork && (
+                  <button
+                    className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onForkSession(session.id, project.projectId, session.__provider);
+                    }}
+                    title={t('tooltips.forkSession', 'Fork this session into a new branch')}
+                  >
+                    <GitFork className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                  </button>
+                )}
                 <button
                   className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40"
                   onClick={(event) => {

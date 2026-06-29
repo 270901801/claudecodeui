@@ -5,6 +5,7 @@ import path from "path";
 import express from "express";
 
 import { providerModelsService } from "../modules/providers/services/provider-models.service.js";
+import { getSystemMetricsSummary } from "../services/system-metrics.service.js";
 import { parseFrontMatter } from "../shared/frontmatter.js";
 import { findAppRoot, getModuleDir } from "../utils/runtime-paths.js";
 
@@ -362,6 +363,16 @@ Custom commands can be created in:
     const model = await resolveCommandModel(statusProvider, statusCatalog, context?.sessionId);
     const memoryUsage = process.memoryUsage();
 
+    // Host-level CPU/memory/disk for the status card. Never throws — the
+    // collector degrades to Node built-ins per-probe — but guard anyway so a
+    // metrics hiccup can't fail the whole status command.
+    let systemMetrics = null;
+    try {
+      systemMetrics = await getSystemMetricsSummary();
+    } catch (err) {
+      console.error("Error collecting system metrics for /status:", err);
+    }
+
     return {
       type: "builtin",
       action: "status",
@@ -380,6 +391,7 @@ Custom commands can be created in:
           heapUsedMb: Math.round(memoryUsage.heapUsed / 1024 / 1024),
           heapTotalMb: Math.round(memoryUsage.heapTotal / 1024 / 1024),
         },
+        systemMetrics,
       },
     };
   },

@@ -14,6 +14,8 @@ import { useSessionStore } from '../../../stores/useSessionStore';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
+import ConversationOutlinePanel from './subcomponents/ConversationOutlinePanel';
+import AiQuotaPanel from './subcomponents/AiQuotaPanel';
 import CommandResultModal from './subcomponents/CommandResultModal';
 
 
@@ -118,6 +120,7 @@ function ChatInterface({
     scrollContainerRef,
     scrollToBottom,
     scrollToBottomAndReset,
+    navigateToOutlineEntry,
     handleScroll,
   } = useChatSessionState({
     selectedProject,
@@ -311,7 +314,13 @@ function ChatInterface({
 
   return (
     <PermissionContext.Provider value={permissionContextValue}>
-      <div className="flex h-full flex-col">
+      <div className="relative flex h-full flex-col">
+        <ConversationOutlinePanel
+          sessionId={currentSessionId || selectedSession?.id || null}
+          refreshKey={chatMessages.length}
+          onNavigate={navigateToOutlineEntry}
+        />
+        <AiQuotaPanel />
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}

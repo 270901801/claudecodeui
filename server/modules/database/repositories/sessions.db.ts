@@ -10,12 +10,14 @@ type SessionRow = {
   jsonl_path: string | null;
   custom_name: string | null;
   isArchived: number;
+  isPinned: number;
+  parent_session_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, isArchived, isPinned, parent_session_id, created_at, updated_at';
 
 const SQLITE_UTC_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -151,16 +153,21 @@ export const sessionsDb = {
    * stays NULL until the provider runtime announces its own id and
    * `assignProviderSessionId` records the mapping.
    */
-  createAppSession(sessionId: string, provider: string, projectPath: string): string {
+  createAppSession(
+    sessionId: string,
+    provider: string,
+    projectPath: string,
+    options: { customName?: string | null; parentSessionId?: string | null } = {}
+  ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
 
     projectsDb.createProjectPath(normalizedProjectPath);
 
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, NULL, NULL, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, normalizedProjectPath);
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, isPinned, parent_session_id, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, NULL, 0, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, provider, options.customName ?? null, normalizedProjectPath, options.parentSessionId ?? null);
 
     return sessionId;
   },
@@ -367,7 +374,7 @@ export const sessionsDb = {
          FROM sessions
          WHERE project_path = ?
            AND isArchived = 0
-         ORDER BY datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
+         ORDER BY COALESCE(isPinned, 0) DESC, datetime(COALESCE(updated_at, created_at)) DESC, session_id DESC
          LIMIT ? OFFSET ?`
       )
       .all(normalizedProjectPath, limit, offset) as SessionRow[];
@@ -420,6 +427,19 @@ export const sessionsDb = {
        SET isArchived = ?
        WHERE session_id = ?`
     ).run(isArchived ? 1 : 0, sessionId);
+  },
+
+  /**
+   * Flips the sidebar pin flag. Mirrors `updateSessionIsArchived`: the row,
+   * metadata, and transcript path stay intact while only the pin state changes.
+   */
+  updateSessionIsPinned(sessionId: string, isPinned: boolean): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE sessions
+       SET isPinned = ?
+       WHERE session_id = ?`
+    ).run(isPinned ? 1 : 0, sessionId);
   },
 
   deleteSessionById(sessionId: string): boolean {

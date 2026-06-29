@@ -32,6 +32,8 @@ type SidebarProjectSessionsProps = {
     sessionTitle: string,
     provider: LLMProvider,
   ) => void;
+  onTogglePinSession: (sessionId: string) => void;
+  onForkSession: (sessionId: string, projectId: string, provider: LLMProvider) => void;
   onLoadMoreSessions: (projectId: string) => void;
   onNewSession: (project: Project) => void;
   t: TFunction;
@@ -74,6 +76,8 @@ export default function SidebarProjectSessions({
   onProjectSelect,
   onSessionSelect,
   onDeleteSession,
+  onTogglePinSession,
+  onForkSession,
   onLoadMoreSessions,
   onNewSession,
   t,
@@ -134,6 +138,8 @@ export default function SidebarProjectSessions({
               onProjectSelect={onProjectSelect}
               onSessionSelect={onSessionSelect}
               onDeleteSession={onDeleteSession}
+              onTogglePinSession={onTogglePinSession}
+              onForkSession={onForkSession}
               t={t}
             />
           ))}
