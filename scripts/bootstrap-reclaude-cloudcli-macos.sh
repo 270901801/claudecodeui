@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_URL="${CLOUDCLI_REPO_URL:-https://github.com/270901801/claudecodeui.git}"
 BRANCH="${CLOUDCLI_BRANCH:-main}"
 INSTALL_DIR="${CLOUDCLI_INSTALL_DIR:-$HOME/code/claudecodeui}"
-PORT="${PORT:-3002}"
+readonly PORT=3001
 NODE_VERSION="${NODE_VERSION:-22}"
 USE_CN_MIRROR="${USE_CN_MIRROR:-1}"
 USE_LOCAL_PROXY="${USE_LOCAL_PROXY:-1}"
@@ -72,7 +72,8 @@ cd "$INSTALL_DIR"
 
 chmod +x scripts/setup-reclaude-claude-alias.sh \
   scripts/setup-taskmaster-reclaude.sh \
-  scripts/start-reclaude-cloudcli.sh
+  scripts/start-reclaude-cloudcli.sh \
+  scripts/run-cloudcli-lan.sh
 
 ./scripts/setup-reclaude-claude-alias.sh
 ./scripts/setup-taskmaster-reclaude.sh
@@ -83,7 +84,18 @@ if [[ -n "$existing_pids" ]]; then
   echo "Stopping existing listener(s) on port $PORT: $existing_pids"
   # shellcheck disable=SC2086
   kill $existing_pids 2>/dev/null || true
-  sleep 2
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ! lsof -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+  if lsof -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Force stopping existing listener(s) on port $PORT: $existing_pids"
+    # shellcheck disable=SC2086
+    kill -9 $existing_pids 2>/dev/null || true
+    sleep 1
+  fi
 fi
 
 start_script="$(mktemp -t cloudcli-reclaude-start.XXXXXX)"

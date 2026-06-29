@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="$HOME/.local/bin:$PATH"
-PORT="${PORT:-3002}"
+readonly PORT=3001
 NODE_VERSION="${NODE_VERSION:-22}"
 RECLAUDE_PATH="${CLAUDE_CLI_PATH:-$HOME/.local/bin/reclaude}"
 NPM_REGISTRY="${NPM_REGISTRY:-${CLOUDCLI_PLUGIN_NPM_REGISTRY:-https://registry.npmjs.org/}}"
@@ -54,4 +54,4 @@ export npm_config_registry="$NPM_REGISTRY"
 npm install --registry="$NPM_REGISTRY"
 npm run build
 
-exec node dist-server/server/cli.js --port "$PORT"
+exec "$ROOT_DIR/scripts/run-cloudcli-lan.sh"

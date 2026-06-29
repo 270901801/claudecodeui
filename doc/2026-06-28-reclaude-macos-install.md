@@ -29,7 +29,7 @@ git checkout codex/reclaude-install-hardening
 chmod +x scripts/start-reclaude-cloudcli.sh scripts/setup-taskmaster-reclaude.sh
 ./scripts/setup-reclaude-claude-alias.sh
 ./scripts/setup-taskmaster-reclaude.sh
-PORT=3002 ./scripts/start-reclaude-cloudcli.sh
+./scripts/start-reclaude-cloudcli.sh
 ```
 
 国内网络推荐启动方式：
@@ -48,7 +48,7 @@ NPM_REGISTRY=https://registry.npmmirror.com/ \
 USE_LOCAL_PROXY=1 \
 NODE_MIRROR=https://npmmirror.com/mirrors/node \
 NPM_REGISTRY=https://registry.npmmirror.com/ \
-PORT=3002 ./scripts/start-reclaude-cloudcli.sh
+./scripts/start-reclaude-cloudcli.sh
 ```
 
 一键安装方式：
@@ -63,7 +63,6 @@ curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts
 HTTPS_PROXY=http://127.0.0.1:7897 \
 HTTP_PROXY=http://127.0.0.1:7897 \
 curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts/bootstrap-reclaude-cloudcli-macos.sh | \
-  PORT=3002 \
   CLOUDCLI_INSTALL_DIR="$HOME/code/claudecodeui" \
   USE_CN_MIRROR=1 \
   USE_LOCAL_PROXY=1 \
@@ -73,6 +72,7 @@ curl -fsSL https://raw.githubusercontent.com/270901801/claudecodeui/main/scripts
 启动脚本会设置：
 
 ```text
+CloudCLI Web 固定使用 3001 端口；如果端口被占用，启动前会先停止占用进程
 CLAUDE_CLI_PATH=$HOME/.local/bin/reclaude
 CloudCLI 插件 registry 跟随 NPM_REGISTRY 或 CLOUDCLI_PLUGIN_NPM_REGISTRY
 npm_config_registry 跟随 NPM_REGISTRY
@@ -259,7 +259,7 @@ reclaude mcp add task-master-ai --scope user --env TASK_MASTER_TOOLS=core -- "$(
 ```bash
 task-master --version
 reclaude mcp list
-curl --noproxy '*' http://127.0.0.1:3002/api/auth/status
+curl --noproxy '*' http://127.0.0.1:3001/api/auth/status
 ```
 
 登录后验证：
