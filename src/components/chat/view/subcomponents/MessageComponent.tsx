@@ -62,6 +62,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
   const assistantCopyContent = message.isToolUse
     ? String(message.displayText || message.content || '')
     : formattedMessageContent;
+  const projectRoot = selectedProject?.fullPath || selectedProject?.path;
   const isCommandOrFileEditToolResponse = Boolean(
     message.isToolUse && COPY_HIDDEN_TOOL_NAMES.has(String(message.toolName || ''))
   );
@@ -195,7 +196,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
               <>
                 <div className="flex flex-col">
                   <div className="flex flex-col">
-                    <Markdown className="prose prose-sm max-w-none dark:prose-invert">
+                    <Markdown
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      projectRoot={projectRoot}
+                      onFileOpen={onFileOpen}
+                    >
                       {String(message.displayText || '')}
                     </Markdown>
                   </div>
@@ -234,7 +239,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
                         <span className="text-xs font-medium text-red-700 dark:text-red-300">{t('messageTypes.error')}</span>
                       </div>
                       <div className="relative text-sm text-red-900 dark:text-red-100">
-                        <Markdown className="prose prose-sm prose-red max-w-none dark:prose-invert">
+                        <Markdown
+                          className="prose prose-sm prose-red max-w-none dark:prose-invert"
+                          projectRoot={projectRoot}
+                          onFileOpen={onFileOpen}
+                        >
                           {String(message.toolResult.content || '')}
                         </Markdown>
                       </div>
@@ -343,7 +352,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
               <Reasoning defaultOpen={false}>
                 <ReasoningTrigger />
                 <ReasoningContent>
-                  <Markdown className="prose prose-sm prose-gray max-w-none dark:prose-invert">
+                  <Markdown
+                    className="prose prose-sm prose-gray max-w-none dark:prose-invert"
+                    projectRoot={projectRoot}
+                    onFileOpen={onFileOpen}
+                  >
                     {message.content}
                   </Markdown>
                   <div className="mt-3 flex items-center text-[11px]">
@@ -400,7 +413,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
 
                   // Normal rendering for non-JSON content
                   return message.type === 'assistant' ? (
-                    <Markdown className="prose prose-sm prose-gray max-w-none dark:prose-invert">
+                    <Markdown
+                      className="prose prose-sm prose-gray max-w-none dark:prose-invert"
+                      projectRoot={projectRoot}
+                      onFileOpen={onFileOpen}
+                    >
                       {content}
                     </Markdown>
                   ) : (
@@ -431,4 +448,3 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
 });
 
 export default MessageComponent;
-

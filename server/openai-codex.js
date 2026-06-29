@@ -13,7 +13,12 @@
  * - getActiveCodexSessions() - List all active sessions
  */
 
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
 import { Codex } from '@openai/codex-sdk';
+
 import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
 import { sessionsService } from './modules/providers/services/sessions.service.js';
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
@@ -22,6 +27,95 @@ import { createCompleteMessage, createNormalizedMessage } from './shared/utils.j
 
 // Track active sessions
 const activeCodexSessions = new Map();
+
+const PROXY_ENV_KEYS = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'ALL_PROXY', 'all_proxy'];
+
+/**
+ * Read the local ReClaude daemon's proxy ports from ~/.reclaude/state.json.
+ *
+ * ReClaude exports HTTP(S)_PROXY pointing at its own gateway port so the
+ * `claude` CLI routes through the carpool gateway. That gateway only proxies
+ * Anthropic traffic — when the Codex child inherits the same proxy its OpenAI
+ * (chatgpt.com) CONNECT tunnels fail with 502. The port is dynamic and rotates
+ * on daemon restart, so we detect it at runtime rather than hard-coding it.
+ *
+ * @returns {Set<string>} host:port strings owned by the ReClaude daemon
+ */
+function getReclaudeProxyTargets() {
+  const targets = new Set();
+  try {
+    const statePath = path.join(os.homedir(), '.reclaude', 'state.json');
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    const ports = [state?.port, state?.transparent_port, state?.last_port, state?.last_transparent_port];
+    for (const port of ports) {
+      if (Number.isFinite(Number(port))) {
+        for (const host of ['127.0.0.1', 'localhost', '::1']) {
+          targets.add(`${host}:${port}`);
+        }
+      }
+    }
+  } catch {
+    // No ReClaude state (not installed / not running) — nothing to strip.
+  }
+  return targets;
+}
+
+function proxyPointsAt(value, targets) {
+  if (!value || targets.size === 0) {
+    return false;
+  }
+  try {
+    const url = new URL(value.includes('://') ? value : `http://${value}`);
+    return targets.has(`${url.hostname}:${url.port}`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build the environment for the spawned Codex CLI.
+ *
+ * Codex must reach OpenAI directly and must NOT be routed through the ReClaude
+ * gateway proxy. Precedence for the replacement proxy:
+ *   1. CODEX_HTTPS_PROXY / CODEX_HTTP_PROXY (explicit override; empty = direct)
+ *   2. npm_config_https_proxy (the real upstream, when it isn't ReClaude's)
+ *   3. unset (direct connection)
+ *
+ * @returns {Record<string, string>} a full env clone with proxies sanitized
+ */
+function buildCodexEnv() {
+  const env = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+
+  const reclaudeTargets = getReclaudeProxyTargets();
+  const explicitHttps = process.env.CODEX_HTTPS_PROXY;
+  const explicitHttp = process.env.CODEX_HTTP_PROXY;
+  const npmProxy = process.env.npm_config_https_proxy;
+  const fallback = proxyPointsAt(npmProxy, reclaudeTargets) ? undefined : npmProxy;
+
+  for (const key of PROXY_ENV_KEYS) {
+    const current = env[key];
+    if (!proxyPointsAt(current, reclaudeTargets)) {
+      continue; // leave user-configured, non-ReClaude proxies untouched
+    }
+
+    const isHttp = key.toLowerCase() === 'http_proxy';
+    const override = isHttp ? (explicitHttp ?? explicitHttps) : (explicitHttps ?? explicitHttp);
+    const replacement = override !== undefined ? override : fallback;
+
+    if (replacement) {
+      env[key] = replacement;
+    } else {
+      delete env[key];
+    }
+  }
+
+  return env;
+}
 
 function readUsageNumber(value) {
   const parsed = Number(value);
@@ -248,8 +342,10 @@ export async function queryCodex(command, options = {}, ws) {
   const abortController = new AbortController();
 
   try {
-    // Initialize Codex SDK
-    codex = new Codex();
+    // Initialize Codex SDK. Sanitize proxy env so the spawned Codex CLI reaches
+    // OpenAI directly instead of inheriting ReClaude's Anthropic-only gateway
+    // proxy (which 502s on chatgpt.com). See buildCodexEnv().
+    codex = new Codex({ env: buildCodexEnv() });
 
     // Thread options with sandbox and approval settings
     const threadOptions = {

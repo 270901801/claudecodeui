@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -6,12 +7,16 @@ import rehypeKatex from 'rehype-katex';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTranslation } from 'react-i18next';
+
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
+import { resolveProjectFileLinkHref } from '../../utils/fileLinkRouting';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
 
 type MarkdownProps = {
   children: React.ReactNode;
   className?: string;
+  projectRoot?: string | null;
+  onFileOpen?: (filePath: string) => void;
 };
 
 type CodeBlockProps = {
@@ -116,17 +121,12 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
   );
 };
 
-const markdownComponents = {
+const baseMarkdownComponents = {
   code: CodeBlock,
   blockquote: ({ children }: { children?: React.ReactNode }) => (
     <blockquote className="my-2 border-l-4 border-gray-300 pl-4 italic text-gray-600 dark:border-gray-600 dark:text-gray-400">
       {children}
     </blockquote>
-  ),
-  a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
-    <a href={href} className="text-blue-600 hover:underline dark:text-blue-400" target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
   ),
   p: ({ children }: { children?: React.ReactNode }) => <div className="mb-2 last:mb-0">{children}</div>,
   table: ({ children }: { children?: React.ReactNode }) => (
@@ -143,10 +143,42 @@ const markdownComponents = {
   ),
 };
 
-export function Markdown({ children, className }: MarkdownProps) {
+export function Markdown({ children, className, projectRoot, onFileOpen }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
   const rehypePlugins = useMemo(() => [rehypeKatex], []);
+  const currentOrigin = typeof window === 'undefined' ? null : window.location.origin;
+  const markdownComponents = useMemo(() => ({
+    ...baseMarkdownComponents,
+    a: ({ href, children: linkChildren }: { href?: string; children?: React.ReactNode }) => {
+      const projectFilePath = resolveProjectFileLinkHref(href, {
+        projectRoot,
+        currentOrigin,
+      });
+      const shouldOpenInEditor = Boolean(projectFilePath && onFileOpen);
+
+      const handleClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+        if (!projectFilePath || !onFileOpen || event.defaultPrevented || event.button !== 0) {
+          return;
+        }
+
+        event.preventDefault();
+        onFileOpen(projectFilePath);
+      };
+
+      return (
+        <a
+          href={href}
+          className="text-blue-600 hover:underline dark:text-blue-400"
+          target={shouldOpenInEditor ? undefined : '_blank'}
+          rel={shouldOpenInEditor ? undefined : 'noopener noreferrer'}
+          onClick={handleClick}
+        >
+          {linkChildren}
+        </a>
+      );
+    },
+  }), [currentOrigin, onFileOpen, projectRoot]);
 
   return (
     <div className={className}>

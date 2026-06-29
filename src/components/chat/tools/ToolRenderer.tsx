@@ -207,7 +207,13 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
         break;
 
       case 'markdown':
-        contentComponent = <MarkdownContent content={contentProps.content || ''} />;
+        contentComponent = (
+          <MarkdownContent
+            content={contentProps.content || ''}
+            projectRoot={selectedProject?.fullPath || selectedProject?.path}
+            onFileOpen={onFileOpen}
+          />
+        );
         break;
 
       case 'file-list':

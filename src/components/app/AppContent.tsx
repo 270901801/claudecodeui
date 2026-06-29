@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Sidebar from '../sidebar/view/Sidebar';
 import MainContent from '../main-content/view/MainContent';
 import CommandPalette from '../command-palette/CommandPalette';
+import ActiveSessionsCapsule from '../active-sessions/ActiveSessionsCapsule';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
@@ -61,6 +62,7 @@ function AppContentInner() {
   } = useSessionProtection();
 
   const {
+    projects,
     selectedProject,
     selectedSession,
     activeTab,
@@ -257,6 +259,21 @@ function AppContentInner() {
         onStartNewChat={handleNewSession}
         onOpenSettings={() => openSettings()}
         onShowTab={setActiveTab}
+      />
+
+      <ActiveSessionsCapsule
+        processingSessions={processingSessions}
+        projects={projects}
+        activeSessionId={sessionId ?? null}
+        isMobile={isMobile}
+        onOpenSession={(targetSessionId) => {
+          setActiveTab('chat');
+          setSidebarOpen(false);
+          navigate(`/session/${targetSessionId}`);
+        }}
+        onAbortSession={(targetSessionId) => {
+          sendMessage({ type: 'chat.abort', sessionId: targetSessionId });
+        }}
       />
     </div>
   );

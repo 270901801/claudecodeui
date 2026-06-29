@@ -34,9 +34,28 @@ export default function MainContentHeader({
     return () => observer.disconnect();
   }, [updateScrollState]);
 
+  const tabSwitcher = (
+    <div className="relative min-w-0 overflow-hidden">
+      {canScrollLeft && (
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent" />
+      )}
+      <div ref={scrollRef} onScroll={updateScrollState} className="scrollbar-hide overflow-x-auto">
+        <MainContentTabSwitcher
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          shouldShowTasksTab={shouldShowTasksTab}
+          shouldShowBrowserTab={shouldShowBrowserTab}
+        />
+      </div>
+      {canScrollRight && (
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-background to-transparent" />
+      )}
+    </div>
+  );
+
   return (
     <div className="pwa-header-safe flex-shrink-0 border-b border-border/60 bg-background px-3 py-1.5 sm:px-4 sm:py-2">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {isMobile && <MobileMenuButton onMenuClick={onMenuClick} />}
           <MainContentTitle
@@ -47,27 +66,12 @@ export default function MainContentHeader({
           />
         </div>
 
-        <div className="relative min-w-0 flex-shrink overflow-hidden sm:flex-shrink-0">
-          {canScrollLeft && (
-            <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-background to-transparent" />
-          )}
-          <div
-            ref={scrollRef}
-            onScroll={updateScrollState}
-            className="scrollbar-hide overflow-x-auto"
-          >
-            <MainContentTabSwitcher
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              shouldShowTasksTab={shouldShowTasksTab}
-              shouldShowBrowserTab={shouldShowBrowserTab}
-            />
-          </div>
-          {canScrollRight && (
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-background to-transparent" />
-          )}
-        </div>
+        {/* Desktop: tabs sit inline to the right of the title */}
+        {!isMobile && <div className="flex-shrink-0">{tabSwitcher}</div>}
       </div>
+
+      {/* Mobile: tabs get their own full-width row so they never cover the title */}
+      {isMobile && <div className="mt-1.5">{tabSwitcher}</div>}
     </div>
   );
 }
