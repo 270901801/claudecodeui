@@ -124,9 +124,12 @@ export const api = {
       method: 'PUT',
     }),
   // Branches a new session from an existing one (Claude only); returns the new session metadata.
-  forkSession: (sessionId) =>
+  // Pass `upToMessageId` (a transcript message UUID) to branch from a specific
+  // conversation node instead of the parent's latest state.
+  forkSession: (sessionId, upToMessageId = null) =>
     authenticatedFetch(`/api/providers/sessions/${sessionId}/fork`, {
       method: 'POST',
+      body: JSON.stringify(upToMessageId ? { upToMessageId } : {}),
     }),
   // `hardDelete` => server `?force=true` (remove DB row + Claude *.jsonl + sessions rows for path).
   deleteProject: (projectId, hardDelete = false) => {

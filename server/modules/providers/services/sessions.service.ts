@@ -202,11 +202,23 @@ export const sessionsService = {
    */
   async fetchSessionOutline(sessionId: string): Promise<{
     total: number;
-    entries: Array<{ id: string; index: number; timestamp: string; preview: string }>;
+    entries: Array<{
+      id: string;
+      messageUuid: string | null;
+      index: number;
+      timestamp: string;
+      preview: string;
+    }>;
   }> {
     const history = await this.fetchHistory(sessionId, { limit: null, offset: 0 });
 
-    const entries: Array<{ id: string; index: number; timestamp: string; preview: string }> = [];
+    const entries: Array<{
+      id: string;
+      messageUuid: string | null;
+      index: number;
+      timestamp: string;
+      preview: string;
+    }> = [];
     history.messages.forEach((message, index) => {
       if (message.role !== 'user' || message.kind === 'tool_result') {
         return;
@@ -222,6 +234,9 @@ export const sessionsService = {
 
       entries.push({
         id: message.id,
+        // Bare transcript UUID (no `_text_0`/`_tr_*` suffix) used as the fork
+        // anchor for `resumeSessionAt`; null for providers that don't expose one.
+        messageUuid: typeof message.messageUuid === 'string' ? message.messageUuid : null,
         index,
         timestamp: message.timestamp,
         preview,
@@ -381,14 +396,23 @@ export const sessionsService = {
    * The new row is created up-front with `parent_session_id` pointing at the
    * parent's provider-native id. The actual SDK fork happens lazily on the
    * first message of the new session (see claude-sdk buildSdkOptions).
+   *
+   * `upToMessageId` (optional) is a parent transcript message UUID: when given,
+   * the fork branches from that node (passed to the SDK as `resumeSessionAt`)
+   * instead of the parent's latest state, so the conversation can continue from
+   * a chosen point in the middle.
    */
-  forkSession(sessionId: string): {
+  forkSession(
+    sessionId: string,
+    upToMessageId?: string | null
+  ): {
     sessionId: string;
     provider: LLMProvider;
     projectPath: string | null;
     parentSessionId: string;
     parentProviderSessionId: string | null;
     customName: string;
+    forkUpToMessageId: string | null;
   } {
     const session = sessionsDb.getSessionById(sessionId);
     if (!session) {
@@ -415,12 +439,15 @@ export const sessionsService = {
     const baseName = session.custom_name?.trim() || session.session_id;
     const customName = `${baseName} (fork)`;
     const newSessionId = randomUUID();
+    const forkUpToMessageId =
+      typeof upToMessageId === 'string' && upToMessageId.trim() ? upToMessageId.trim() : null;
 
     sessionsDb.createAppSession(newSessionId, session.provider, session.project_path, {
       customName,
       // Resume target for the SDK fork: prefer the provider-native id, falling
       // back to the parent app id for sessions discovered directly on disk.
       parentSessionId: session.provider_session_id ?? session.session_id,
+      forkUpToMessageId,
     });
 
     return {
@@ -430,6 +457,7 @@ export const sessionsService = {
       parentSessionId: session.session_id,
       parentProviderSessionId: session.provider_session_id,
       customName,
+      forkUpToMessageId,
     };
   },
 };

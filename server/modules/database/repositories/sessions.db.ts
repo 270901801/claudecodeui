@@ -12,12 +12,13 @@ type SessionRow = {
   isArchived: number;
   isPinned: number;
   parent_session_id: string | null;
+  fork_up_to_message_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, isArchived, isPinned, parent_session_id, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, isArchived, isPinned, parent_session_id, fork_up_to_message_id, created_at, updated_at';
 
 const SQLITE_UTC_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -157,7 +158,11 @@ export const sessionsDb = {
     sessionId: string,
     provider: string,
     projectPath: string,
-    options: { customName?: string | null; parentSessionId?: string | null } = {}
+    options: {
+      customName?: string | null;
+      parentSessionId?: string | null;
+      forkUpToMessageId?: string | null;
+    } = {}
   ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
@@ -165,9 +170,16 @@ export const sessionsDb = {
     projectsDb.createProjectPath(normalizedProjectPath);
 
     db.prepare(
-      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, isPinned, parent_session_id, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, ?, NULL, 0, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, options.customName ?? null, normalizedProjectPath, options.parentSessionId ?? null);
+      `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, isPinned, parent_session_id, fork_up_to_message_id, created_at, updated_at)
+       VALUES (?, ?, NULL, ?, ?, NULL, 0, 0, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(
+      sessionId,
+      provider,
+      options.customName ?? null,
+      normalizedProjectPath,
+      options.parentSessionId ?? null,
+      options.forkUpToMessageId ?? null
+    );
 
     return sessionId;
   },

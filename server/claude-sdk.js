@@ -151,7 +151,7 @@ function matchesToolPermission(entry, toolName, input) {
  * @returns {Object} SDK-compatible options
  */
 function mapCliOptionsToSDK(options = {}) {
-  const { sessionId, cwd, toolsSettings, permissionMode, forkSession } = options;
+  const { sessionId, cwd, toolsSettings, permissionMode, forkSession, resumeSessionAt } = options;
 
   const sdkOptions = {};
 
@@ -231,6 +231,13 @@ function mapCliOptionsToSDK(options = {}) {
     // gateway only on the first message of a forked session.
     if (forkSession) {
       sdkOptions.forkSession = true;
+    }
+
+    // Node-level fork: resume the parent transcript only up to (and including)
+    // this message UUID, so the branch continues from a chosen point in the
+    // conversation rather than its latest state. Paired with `forkSession`.
+    if (resumeSessionAt) {
+      sdkOptions.resumeSessionAt = resumeSessionAt;
     }
   }
 

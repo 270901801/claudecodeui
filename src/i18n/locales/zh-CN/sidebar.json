@@ -32,7 +32,9 @@
     "loadingSessions": "加载会话中...",
     "unnamed": "未命名",
     "loading": "加载中...",
-    "showMore": "显示更多会话"
+    "showMore": "显示更多会话",
+    "showMoreCount": "展开更多（还有 {{count}} 条）",
+    "collapse": "收起"
   },
   "tooltips": {
     "viewEnvironments": "查看环境",

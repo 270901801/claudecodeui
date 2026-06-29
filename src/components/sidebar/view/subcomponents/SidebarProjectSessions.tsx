@@ -1,4 +1,5 @@
-import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
@@ -38,6 +39,8 @@ type SidebarProjectSessionsProps = {
   onNewSession: (project: Project) => void;
   t: TFunction;
 };
+
+const COLLAPSED_SESSION_COUNT = 5;
 
 function SessionListSkeleton() {
   return (
@@ -82,11 +85,19 @@ export default function SidebarProjectSessions({
   onNewSession,
   t,
 }: SidebarProjectSessionsProps) {
+  // Client-side display cap: when a project is first expanded, only the first
+  // few sessions render so the sidebar isn't flooded. This resets on collapse
+  // because the component unmounts while `!isExpanded`.
+  const [showAllSessions, setShowAllSessions] = useState(false);
+
   if (!isExpanded) {
     return null;
   }
 
   const hasSessions = sessions.length > 0;
+  const isCapped = sessions.length > COLLAPSED_SESSION_COUNT;
+  const visibleSessions = showAllSessions ? sessions : sessions.slice(0, COLLAPSED_SESSION_COUNT);
+  const hiddenCount = sessions.length - COLLAPSED_SESSION_COUNT;
 
   return (
     <div className="ml-3 space-y-1 border-l border-border pl-3">
@@ -121,7 +132,7 @@ export default function SidebarProjectSessions({
         </div>
       ) : (
         <>
-          {sessions.map((session) => (
+          {visibleSessions.map((session) => (
             <SidebarSessionItem
               key={session.id}
               project={project}
@@ -144,7 +155,19 @@ export default function SidebarProjectSessions({
             />
           ))}
 
-          {hasMoreSessions && (
+          {isCapped && !showAllSessions && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-full justify-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowAllSessions(true)}
+            >
+              <ChevronDown className="h-3 w-3" />
+              {t('sessions.showMoreCount', { count: hiddenCount })}
+            </Button>
+          )}
+
+          {showAllSessions && hasMoreSessions && (
             <Button
               variant="ghost"
               size="sm"
@@ -152,7 +175,19 @@ export default function SidebarProjectSessions({
               onClick={() => onLoadMoreSessions(project.projectId)}
               disabled={isLoadingMoreSessions}
             >
-              {isLoadingMoreSessions ? t('sessions.loadingSessions') : 'Load more sessions'}
+              {isLoadingMoreSessions ? t('sessions.loadingSessions') : t('sessions.showMore')}
+            </Button>
+          )}
+
+          {isCapped && showAllSessions && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-full justify-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowAllSessions(false)}
+            >
+              <ChevronUp className="h-3 w-3" />
+              {t('sessions.collapse')}
             </Button>
           )}
         </>

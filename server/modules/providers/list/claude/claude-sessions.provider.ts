@@ -295,6 +295,30 @@ export class ClaudeSessionsProvider implements IProviderSessions {
    * message shape consumed by REST and WebSocket clients.
    */
   normalizeMessage(rawMessage: unknown, sessionId: string | null): NormalizedMessage[] {
+    const messages = this.normalizeMessageInternal(rawMessage, sessionId);
+
+    // Tag every message produced from this transcript entry with its bare JSONL
+    // `uuid` so the UI can use it as a node-level fork anchor (`resumeSessionAt`).
+    // The normalized `id` embeds this uuid plus a `_text_*`/`_tr_*` suffix, so it
+    // can't be passed to the SDK directly; `messageUuid` keeps the raw value.
+    const rawForUuid = readObjectRecord(rawMessage);
+    const messageUuid =
+      rawForUuid && typeof rawForUuid.uuid === 'string' && rawForUuid.uuid ? rawForUuid.uuid : null;
+    if (messageUuid) {
+      for (const message of messages) {
+        if (message.messageUuid === undefined) {
+          message.messageUuid = messageUuid;
+        }
+      }
+    }
+
+    return messages;
+  }
+
+  private normalizeMessageInternal(
+    rawMessage: unknown,
+    sessionId: string | null,
+  ): NormalizedMessage[] {
     const raw = readObjectRecord(rawMessage);
     if (!raw) {
       return [];

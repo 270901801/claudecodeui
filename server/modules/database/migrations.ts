@@ -413,6 +413,8 @@ const addSessionPinAndForkColumns = (db: Database): void => {
 
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'isPinned', 'BOOLEAN DEFAULT 0');
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'parent_session_id', 'TEXT');
+  // Node-level fork anchor (parent transcript message UUID to branch from).
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'fork_up_to_message_id', 'TEXT');
   db.exec('UPDATE sessions SET isPinned = COALESCE(isPinned, 0)');
 };
 

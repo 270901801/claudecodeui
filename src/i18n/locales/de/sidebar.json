@@ -32,7 +32,9 @@
     "loadingSessions": "Sitzungen werden geladen...",
     "unnamed": "Unbenannt",
     "loading": "Lädt...",
-    "showMore": "Weitere Sitzungen anzeigen"
+    "showMore": "Weitere Sitzungen anzeigen",
+    "showMoreCount": "{{count}} weitere Sitzungen anzeigen",
+    "collapse": "Einklappen"
   },
   "tooltips": {
     "viewEnvironments": "Umgebungen anzeigen",

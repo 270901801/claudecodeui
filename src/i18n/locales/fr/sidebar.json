@@ -32,7 +32,9 @@
     "loadingSessions": "Chargement des sessions...",
     "unnamed": "Sans nom",
     "loading": "Chargement...",
-    "showMore": "Afficher plus de sessions"
+    "showMore": "Afficher plus de sessions",
+    "showMoreCount": "Afficher {{count}} sessions de plus",
+    "collapse": "Réduire"
   },
   "tooltips": {
     "viewEnvironments": "Voir les environnements",

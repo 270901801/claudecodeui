@@ -582,7 +582,14 @@ router.post(
   '/sessions/:sessionId/fork',
   asyncHandler(async (req: Request, res: Response) => {
     const sessionId = parseSessionId(req.params.sessionId);
-    const result = sessionsService.forkSession(sessionId);
+    // Optional node-level fork anchor: a parent transcript message UUID to
+    // branch from. Omitted/blank => fork from the parent's latest state.
+    const body = (req.body ?? {}) as { upToMessageId?: unknown };
+    const upToMessageId =
+      typeof body.upToMessageId === 'string' && body.upToMessageId.trim()
+        ? body.upToMessageId.trim()
+        : null;
+    const result = sessionsService.forkSession(sessionId, upToMessageId);
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );

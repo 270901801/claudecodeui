@@ -109,12 +109,10 @@ export default function SidebarProjectList({
   );
 
   useEffect(() => {
-    let baseTitle = 'CloudCLI UI';
     const displayName = selectedProject?.displayName?.trim();
-    if (displayName) {
-      baseTitle = `${displayName} - ${baseTitle}`;
-    }
-    document.title = baseTitle;
+    // Show the current conversation's project name; fall back to the app name
+    // only when no project is selected.
+    document.title = displayName || 'CloudCLI UI';
   }, [selectedProject]);
 
   const showProjects = !isLoading && projects.length > 0 && filteredProjects.length > 0;

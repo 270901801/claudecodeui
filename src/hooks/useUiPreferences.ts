@@ -1,5 +1,8 @@
 import { useEffect, useReducer, useRef } from 'react';
 
+import { api } from '../utils/api';
+import { IS_PLATFORM } from '../constants/config';
+
 type UiPreferences = {
   autoExpandTools: boolean;
   showRawParameters: boolean;
@@ -46,6 +49,41 @@ const DEFAULTS: UiPreferences = {
 const PREFERENCE_KEYS = Object.keys(DEFAULTS) as UiPreferenceKey[];
 const VALID_KEYS = new Set<UiPreferenceKey>(PREFERENCE_KEYS); // prevents unknown keys from being written
 const SYNC_EVENT = 'ui-preferences:sync';
+
+// ── Server-side persistence ──────────────────────────────────────
+// localStorage is per-device and gets evicted by PWAs/Safari, so we also mirror
+// the preferences to the backend (per user) so they survive reloads and sync
+// across devices. Only the default `uiPreferences` store is backed by the server.
+const SERVER_STORAGE_KEY = 'uiPreferences';
+const SERVER_ENDPOINT = '/settings/ui-preferences';
+const SAVE_DEBOUNCE_MS = 400;
+
+// Module-level coordinator so the multiple useUiPreferences() instances on a page
+// fetch once and debounce-save once, instead of N times each.
+const serverSync = {
+  loaded: new Set<string>(),
+  lastJson: new Map<string, string>(),
+  timers: new Map<string, ReturnType<typeof setTimeout>>(),
+};
+
+const hasAuth = (): boolean => {
+  if (IS_PLATFORM) return true; // cookie-based auth on platform
+  try {
+    return Boolean(localStorage.getItem('auth-token'));
+  } catch {
+    return false;
+  }
+};
+
+// Canonical serialization (stable key order) so we can cheaply diff against the
+// last value known to match the server and skip redundant writes.
+const serializePreferences = (source: Partial<Record<UiPreferenceKey, unknown>>): string => {
+  const ordered = PREFERENCE_KEYS.reduce((acc, key) => {
+    acc[key] = parseBoolean(source[key], DEFAULTS[key]);
+    return acc;
+  }, {} as Record<UiPreferenceKey, boolean>);
+  return JSON.stringify(ordered);
+};
 
 type SyncEventDetail = {
   storageKey: string;
@@ -217,6 +255,75 @@ export function useUiPreferences(storageKey = 'uiPreferences') {
       window.removeEventListener(SYNC_EVENT, handleSyncEvent as EventListener);
     };
   }, [storageKey]);
+
+  // Load persisted preferences from the server once, then merge them in. The
+  // resulting state change propagates to every other hook instance via the
+  // localStorage write + SYNC_EVENT in the effect above.
+  useEffect(() => {
+    if (typeof window === 'undefined' || storageKey !== SERVER_STORAGE_KEY) {
+      return;
+    }
+    if (serverSync.loaded.has(storageKey) || !hasAuth()) {
+      return;
+    }
+    serverSync.loaded.add(storageKey);
+
+    let cancelled = false;
+    api
+      .get(SERVER_ENDPOINT)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const prefs = data?.preferences;
+        if (cancelled || !prefs || typeof prefs !== 'object') {
+          return;
+        }
+        // Record the server value so the save effect below doesn't echo it back.
+        serverSync.lastJson.set(storageKey, serializePreferences(prefs));
+        dispatch({ type: 'set_many', value: prefs });
+      })
+      .catch(() => {
+        // Offline / unauthenticated — keep whatever localStorage gave us and
+        // allow a retry on the next mount.
+        serverSync.loaded.delete(storageKey);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storageKey]);
+
+  // Debounced, de-duplicated save to the server whenever preferences change.
+  useEffect(() => {
+    if (typeof window === 'undefined' || storageKey !== SERVER_STORAGE_KEY || !hasAuth()) {
+      return;
+    }
+
+    const json = serializePreferences(state);
+    if (serverSync.lastJson.get(storageKey) === json) {
+      return; // unchanged vs. last persisted value
+    }
+
+    const pending = serverSync.timers.get(storageKey);
+    if (pending) {
+      clearTimeout(pending);
+    }
+    const timer = setTimeout(() => {
+      serverSync.timers.delete(storageKey);
+      api
+        .put(SERVER_ENDPOINT, state)
+        .then((res) => {
+          if (res.ok) {
+            serverSync.lastJson.set(storageKey, json);
+          }
+        })
+        .catch(() => {
+          // Will retry on the next change.
+        });
+    }, SAVE_DEBOUNCE_MS);
+    serverSync.timers.set(storageKey, timer);
+    // Note: the timer is shared across instances by storageKey, so we don't clear
+    // it on a single instance unmounting — that would drop a pending save.
+  }, [state, storageKey]);
 
   const setPreference = (key: UiPreferenceKey, value: unknown) => {
     dispatch({ type: 'set', key, value });

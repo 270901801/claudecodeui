@@ -48,6 +48,15 @@ CREATE TABLE IF NOT EXISTS user_notification_preferences (
 );
 `;
 
+export const USER_UI_PREFERENCES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS user_ui_preferences (
+    user_id INTEGER PRIMARY KEY,
+    preferences_json TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`;
+
 export const VAPID_KEYS_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS vapid_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -97,6 +106,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     isPinned BOOLEAN DEFAULT 0,
     -- Fork lineage: app session_id this session was forked from (NULL if original).
     parent_session_id TEXT,
+    -- Node-level fork anchor: the parent transcript message UUID to branch from
+    -- (passed to the SDK as \`resumeSessionAt\` on the fork's first message). NULL
+    -- means fork from the parent's full transcript (latest state).
+    fork_up_to_message_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (session_id),
@@ -142,6 +155,8 @@ CREATE INDEX IF NOT EXISTS idx_user_credentials_active ON user_credentials(is_ac
 
 ${USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_user_notification_preferences_user_id ON user_notification_preferences(user_id);
+
+${USER_UI_PREFERENCES_TABLE_SCHEMA_SQL}
 
 ${VAPID_KEYS_TABLE_SCHEMA_SQL}
 

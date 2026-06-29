@@ -218,6 +218,13 @@ export type NormalizedMessage = {
    * the live events they missed across websocket reconnects.
    */
   seq?: number;
+  /**
+   * Bare provider transcript UUID for this message (Claude JSONL `uuid`). Unlike
+   * `id` (which appends `_text_*`/`_tr_*` suffixes), this is the value the SDK
+   * accepts as a node-level fork anchor via `resumeSessionAt`. Absent for live
+   * stream fragments and providers that don't expose a per-message uuid.
+   */
+  messageUuid?: string;
   role?: 'user' | 'assistant';
   content?: string;
   /**

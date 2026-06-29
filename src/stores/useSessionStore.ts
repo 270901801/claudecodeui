@@ -43,6 +43,13 @@ export interface NormalizedMessage {
    */
   seq?: number;
 
+  /**
+   * Bare transcript UUID for this message (Claude JSONL `uuid`), distinct from
+   * `id` which appends `_text_*`/`_tr_*` suffixes. Used as the node-level fork
+   * anchor passed to the server as `upToMessageId`.
+   */
+  messageUuid?: string;
+
   // kind-specific fields (flat for simplicity)
   role?: 'user' | 'assistant';
   content?: string;

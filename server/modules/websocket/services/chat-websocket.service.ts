@@ -163,6 +163,15 @@ async function handleChatSend(
   const isForkFirstMessage = !session.provider_session_id && Boolean(session.parent_session_id);
   const resumeTargetId = session.provider_session_id ?? (isForkFirstMessage ? session.parent_session_id : null);
 
+  // Node-level fork: when the branch was created from a specific transcript node,
+  // tell the SDK to resume the parent only up to that message UUID so the new
+  // conversation continues from that point instead of the parent's latest state.
+  // Only applies on the fork's first message (alongside `forkSession`).
+  const forkUpToMessageId =
+    isForkFirstMessage && typeof session.fork_up_to_message_id === 'string'
+      ? session.fork_up_to_message_id
+      : null;
+
   // The provider runtimes receive the provider-native session id (that is the
   // id their CLI/SDK understands for resume). Brand-new sessions have no
   // provider id yet, so the runtime starts fresh and announces one, which the
@@ -172,6 +181,7 @@ async function handleChatSend(
     sessionId: resumeTargetId ?? undefined,
     resume: Boolean(resumeTargetId),
     forkSession: isForkFirstMessage,
+    resumeSessionAt: forkUpToMessageId ?? undefined,
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
   };

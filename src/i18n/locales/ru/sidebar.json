@@ -32,7 +32,9 @@
     "loadingSessions": "Загрузка сеансов...",
     "unnamed": "Без имени",
     "loading": "Загрузка...",
-    "showMore": "Показать больше сеансов"
+    "showMore": "Показать больше сеансов",
+    "showMoreCount": "Показать ещё {{count}} сессий",
+    "collapse": "Свернуть"
   },
   "tooltips": {
     "viewEnvironments": "Просмотр окружений",

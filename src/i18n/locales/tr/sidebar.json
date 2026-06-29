@@ -32,7 +32,9 @@
     "loadingSessions": "Oturumlar yükleniyor...",
     "unnamed": "Adsız",
     "loading": "Yükleniyor...",
-    "showMore": "Daha fazla oturum göster"
+    "showMore": "Daha fazla oturum göster",
+    "showMoreCount": "{{count}} oturum daha göster",
+    "collapse": "Daralt"
   },
   "tooltips": {
     "viewEnvironments": "Ortamları Görüntüle",
