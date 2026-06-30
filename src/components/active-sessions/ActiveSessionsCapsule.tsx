@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ChevronDown,
   Clock,
+  GripHorizontal,
   History,
   Loader2,
   ShieldAlert,
@@ -68,6 +69,47 @@ const PROVIDER_LABEL: Record<string, string> = {
 const providerLabel = (provider: string | null): string | null =>
   provider ? PROVIDER_LABEL[provider] ?? provider : null;
 
+const POSITION_STORAGE_KEY = 'active-sessions:capsule-position';
+
+interface CapsulePosition {
+  x: number;
+  y: number;
+}
+
+const loadPosition = (): CapsulePosition | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(POSITION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<CapsulePosition>;
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+      return { x: parsed.x, y: parsed.y };
+    }
+  } catch {
+    // Malformed value — fall back to the default corner.
+  }
+  return null;
+};
+
+const savePosition = (pos: CapsulePosition | null): void => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (pos) {
+      window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(pos));
+    } else {
+      window.localStorage.removeItem(POSITION_STORAGE_KEY);
+    }
+  } catch {
+    // Storage unavailable — position simply won't persist.
+  }
+};
+
 const updateAppBadge = (count: number) => {
   const nav = navigator as Navigator & {
     setAppBadge?: (count?: number) => Promise<void>;
@@ -105,6 +147,103 @@ export default function ActiveSessionsCapsule({
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
+  // Drag-to-move: the user can reposition the capsule anywhere on screen; the
+  // chosen spot persists in localStorage. `null` means "default corner".
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<CapsulePosition | null>(() => loadPosition());
+  const [dragging, setDragging] = useState(false);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originLeft: number;
+    originTop: number;
+    moved: boolean;
+  } | null>(null);
+  // Set briefly after a real drag so the trailing click doesn't toggle the panel.
+  const suppressClickRef = useRef(false);
+
+  const handleDragPointerDown = (event: React.PointerEvent) => {
+    if (event.button !== 0) {
+      return; // ignore right/middle clicks
+    }
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originLeft: rect.left,
+      originTop: rect.top,
+      moved: false,
+    };
+    setDragging(true);
+    try {
+      (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    } catch {
+      // Pointer capture unsupported — the handlers below still drive the drag.
+    }
+  };
+
+  const handleDragPointerMove = (event: React.PointerEvent) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) {
+      return;
+    }
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (!state.moved && Math.hypot(dx, dy) > 4) {
+      state.moved = true;
+    }
+    if (!state.moved) {
+      return;
+    }
+    const el = containerRef.current;
+    const width = el?.offsetWidth ?? 0;
+    const height = el?.offsetHeight ?? 0;
+    const maxLeft = Math.max(0, window.innerWidth - width);
+    const maxTop = Math.max(0, window.innerHeight - height);
+    const x = Math.min(Math.max(0, state.originLeft + dx), maxLeft);
+    const y = Math.min(Math.max(0, state.originTop + dy), maxTop);
+    setPosition({ x, y });
+  };
+
+  const handleDragPointerUp = (event: React.PointerEvent) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) {
+      return;
+    }
+    dragStateRef.current = null;
+    setDragging(false);
+    if (state.moved) {
+      suppressClickRef.current = true;
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
+    try {
+      (event.currentTarget as Element).releasePointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Double-click the drag handle to snap back to the default corner.
+  const resetPosition = () => {
+    setPosition(null);
+    savePosition(null);
+  };
+
+  const dragHandlers = {
+    onPointerDown: handleDragPointerDown,
+    onPointerMove: handleDragPointerMove,
+    onPointerUp: handleDragPointerUp,
+    onPointerCancel: handleDragPointerUp,
+  };
+
   const hasRunning = running.length > 0;
   const hasRecent = recentIdle.length > 0;
   const unviewedCount = recentIdle.reduce((sum, entry) => sum + (entry.unviewed ? 1 : 0), 0);
@@ -128,11 +267,56 @@ export default function ActiveSessionsCapsule({
     prevNeedsInputRef.current = needsInputTotal;
   }, [needsInputTotal]);
 
+  // Tapping anywhere outside the capsule collapses the expanded panel.
+  useEffect(() => {
+    if (!expanded) {
+      return undefined;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && containerRef.current && !containerRef.current.contains(target)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
+  }, [expanded]);
+
   // Reflect the running count on the installed-PWA app icon.
   useEffect(() => {
     updateAppBadge(running.length);
     return () => updateAppBadge(0);
   }, [running.length]);
+
+  // Persist the position once the drag settles (skip writes mid-drag).
+  useEffect(() => {
+    if (dragging || !position) {
+      return;
+    }
+    savePosition(position);
+  }, [position, dragging]);
+
+  // Keep the capsule on screen when the viewport shrinks (rotate / resize).
+  useEffect(() => {
+    if (!position) {
+      return undefined;
+    }
+    const onResize = () => {
+      const el = containerRef.current;
+      const width = el?.offsetWidth ?? 0;
+      const height = el?.offsetHeight ?? 0;
+      setPosition((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const x = Math.min(prev.x, Math.max(0, window.innerWidth - width));
+        const y = Math.min(prev.y, Math.max(0, window.innerHeight - height));
+        return x === prev.x && y === prev.y ? prev : { x, y };
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [position]);
 
   if (!visible) {
     return null;
@@ -142,23 +326,39 @@ export default function ActiveSessionsCapsule({
     ? `${needsInputTotal} 个待处理`
     : hasRunning
       ? `${running.length} 个运行中`
-      : '最近会话';
+      : `最近会话 · ${recentIdle.length}`;
 
   const containerStyle: React.CSSProperties = {
-    bottom: `calc(env(safe-area-inset-bottom, 0px) + ${isMobile ? '5rem' : '1.25rem'})`,
-    right: isMobile ? '0.75rem' : '1.25rem',
+    ...(position
+      ? { left: position.x, top: position.y }
+      : {
+          bottom: `calc(env(safe-area-inset-bottom, 0px) + ${isMobile ? '5rem' : '1.25rem'})`,
+          right: isMobile ? '0.75rem' : '1.25rem',
+        }),
+    userSelect: dragging ? 'none' : undefined,
+    touchAction: dragging ? 'none' : undefined,
   };
 
   const capsule = (
-    <div className="fixed z-[60] flex flex-col items-end gap-2" style={containerStyle}>
+    <div ref={containerRef} className="fixed z-[60] flex flex-col items-end gap-2" style={containerStyle}>
       {expanded && (
         <div className="w-[min(92vw,22rem)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl">
-          <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
-            <span className="text-sm font-medium text-foreground">会话</span>
+          <div
+            {...dragHandlers}
+            onDoubleClick={resetPosition}
+            title="拖拽移动 · 双击复位"
+            className="flex select-none items-center justify-between border-b border-border/50 px-3 py-2"
+            style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
+          >
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <GripHorizontal className="h-4 w-4 text-muted-foreground/60" />
+              会话
+            </span>
             <button
               type="button"
               aria-label="收起"
               className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+              onPointerDown={(event) => event.stopPropagation()}
               onClick={() => setExpanded(false)}
             >
               <ChevronDown className="h-4 w-4" />
@@ -168,7 +368,7 @@ export default function ActiveSessionsCapsule({
           <div className="max-h-[60vh] overflow-y-auto p-2">
             {hasRunning && (
               <div className="px-1 pb-1 pt-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                运行中
+                运行中 · {running.length}
               </div>
             )}
             {running.map((entry) => {
@@ -248,7 +448,7 @@ export default function ActiveSessionsCapsule({
 
             {hasRecent && (
               <div className="px-1 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                最近
+                最近 · {recentIdle.length}
               </div>
             )}
             {recentIdle.map((entry) => (
@@ -300,13 +500,23 @@ export default function ActiveSessionsCapsule({
 
       <button
         type="button"
-        onClick={() => setExpanded((value) => !value)}
+        {...dragHandlers}
+        onDoubleClick={resetPosition}
+        onClick={() => {
+          // A drag just ended on this button — don't also toggle the panel.
+          if (suppressClickRef.current) {
+            return;
+          }
+          setExpanded((value) => !value);
+        }}
+        title="拖拽移动 · 双击复位"
         className={[
           'relative flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium shadow-lg transition-colors',
           needsInputTotal > 0
             ? 'bg-amber-500 text-white hover:bg-amber-600'
             : 'border border-border/60 bg-card text-foreground hover:bg-muted',
         ].join(' ')}
+        style={{ touchAction: 'none' }}
         aria-label={`活跃会话面板：${collapsedLabel}${unviewedCount > 0 ? `（${unviewedCount} 个未查看）` : ''}`}
       >
         {unviewedCount > 0 && (

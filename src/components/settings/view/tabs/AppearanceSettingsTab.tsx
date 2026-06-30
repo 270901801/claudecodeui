@@ -1,9 +1,9 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DarkModeToggle } from '../../../../shared/view/ui';
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import {
-  MAX_RECENT_OPTIONS,
   setMaxRecentSessions,
   useMaxRecentSessions,
 } from '../../../active-sessions/recentSessionsLimit';
@@ -12,6 +12,44 @@ import SettingsCard from '../SettingsCard';
 import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
+
+function RecentSessionsLimitInput() {
+  const maxRecentSessions = useMaxRecentSessions();
+  const [draft, setDraft] = useState<string>(String(maxRecentSessions));
+
+  // Keep the field in sync when the stored value changes (e.g. server hydration
+  // from another device) and we are not mid-edit.
+  useEffect(() => {
+    setDraft(String(maxRecentSessions));
+  }, [maxRecentSessions]);
+
+  const commit = () => {
+    const parsed = Number.parseInt(draft, 10);
+    if (Number.isFinite(parsed)) {
+      setMaxRecentSessions(parsed);
+    } else {
+      // Empty/invalid input — revert to the last stored value.
+      setDraft(String(maxRecentSessions));
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={1}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={commit}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') {
+          event.currentTarget.blur();
+        }
+      }}
+      className="w-full touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-28"
+    />
+  );
+}
 
 type AppearanceSettingsTabProps = {
   projectSortOrder: ProjectSortOrder;
@@ -35,7 +73,6 @@ export default function AppearanceSettingsTab({
   onCodeEditorFontSizeChange,
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
-  const maxRecentSessions = useMaxRecentSessions();
 
   return (
     <div className="space-y-8">
@@ -80,17 +117,7 @@ export default function AppearanceSettingsTab({
             label={t('appearanceSettings.recentSessions.label')}
             description={t('appearanceSettings.recentSessions.description')}
           >
-            <select
-              value={maxRecentSessions}
-              onChange={(event) => setMaxRecentSessions(Number(event.target.value))}
-              className="w-full touch-manipulation rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-28"
-            >
-              {MAX_RECENT_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <RecentSessionsLimitInput />
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

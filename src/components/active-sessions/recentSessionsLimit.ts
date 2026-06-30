@@ -11,13 +11,12 @@ const SERVER_ENDPOINT = '/settings/ui-preferences';
 
 /** Default number of recent (idle) sessions shown in the bottom-right capsule. */
 export const DEFAULT_MAX_RECENT = 8;
-/** Selectable values offered in Settings. */
-export const MAX_RECENT_OPTIONS = [3, 5, 8, 12, 20] as const;
 const MIN_MAX_RECENT = 1;
-const MAX_MAX_RECENT = 50;
 
+// No upper bound by design — the user types whatever cap they want; we only
+// guard against zero/negative which would make the capsule meaningless.
 const clamp = (value: number): number =>
-  Math.min(MAX_MAX_RECENT, Math.max(MIN_MAX_RECENT, Math.round(value)));
+  Math.max(MIN_MAX_RECENT, Math.round(value));
 
 const clampMaybe = (value: unknown): number | null => {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
