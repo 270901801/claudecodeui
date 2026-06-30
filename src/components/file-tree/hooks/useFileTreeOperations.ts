@@ -239,14 +239,32 @@ export function useFileTreeOperations({
     }
   }, [selectedProject, newItemParent, newItemType, newItemName, validateFilename, showToast, t, onRefresh, handleCancelCreate]);
 
-  // Copy path to clipboard
+  // Copy path to clipboard — falls back to execCommand for non-HTTPS (LAN HTTP) contexts
   const handleCopyPath = useCallback((item: FileTreeNode) => {
-    navigator.clipboard.writeText(item.path).catch(() => {
-      // Clipboard API may fail in some contexts (e.g., non-HTTPS)
-      showToast(t('fileTree.toast.copyFailed', 'Failed to copy path'), 'error');
-      return;
-    });
-    showToast(t('fileTree.toast.pathCopied', 'Path copied to clipboard'), 'success');
+    const fallbackCopy = () => {
+      const ta = document.createElement('textarea');
+      ta.value = item.path;
+      ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) {
+        showToast(t('fileTree.toast.pathCopied', 'Path copied to clipboard'), 'success');
+      } else {
+        showToast(t('fileTree.toast.copyFailed', 'Failed to copy path'), 'error');
+      }
+    };
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(item.path).then(
+        () => showToast(t('fileTree.toast.pathCopied', 'Path copied to clipboard'), 'success'),
+        () => fallbackCopy(),
+      );
+    } else {
+      fallbackCopy();
+    }
   }, [showToast, t]);
 
   const triggerBrowserDownload = useCallback((blob: Blob, fileName: string) => {
