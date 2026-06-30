@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Edit3, Star, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -107,8 +108,25 @@ export default function SidebarProjectItem({
   const sessionCountLabel = `${sessionCountDisplay} session${totalSessionCount === 1 ? '' : 's'}`;
   const taskStatus = getTaskIndicatorStatus(project, mcpServerStatus);
 
+  const [pendingUnstar, setPendingUnstar] = useState(false);
+
   const toggleProject = () => onToggleProject(project.projectId);
-  const toggleStarProject = () => onToggleStarProject(project.projectId);
+  const toggleStarProject = () => {
+    if (isStarred) {
+      setPendingUnstar(true);
+    } else {
+      onToggleStarProject(project.projectId);
+    }
+  };
+  const confirmUnstar = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setPendingUnstar(false);
+    onToggleStarProject(project.projectId);
+  };
+  const cancelUnstar = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    setPendingUnstar(false);
+  };
 
   const saveProjectName = () => {
     onSaveProjectName(project.projectId);
@@ -138,6 +156,26 @@ export default function SidebarProjectItem({
           >
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 flex-1 items-center gap-3">
+                {pendingUnstar ? (
+                  <div
+                    className="flex items-center gap-1.5"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">取消收藏?</span>
+                    <button
+                      className="h-7 px-2 rounded-md text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95 transition-all"
+                      onClick={confirmUnstar}
+                    >
+                      确认
+                    </button>
+                    <button
+                      className="h-7 px-2 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 active:scale-95 transition-all"
+                      onClick={cancelUnstar}
+                    >
+                      取消
+                    </button>
+                  </div>
+                ) : (
                 <button
                   className={cn(
                     'w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-all duration-150 border',
@@ -160,6 +198,7 @@ export default function SidebarProjectItem({
                     )}
                   />
                 </button>
+                )}
 
                 <div className="min-w-0 flex-1">
                   {isEditing ? (
@@ -275,6 +314,26 @@ export default function SidebarProjectItem({
           onClick={selectAndToggleProject}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
+            {pendingUnstar ? (
+              <div
+                className="flex items-center gap-1 shrink-0"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <span className="text-[11px] text-muted-foreground whitespace-nowrap">取消收藏?</span>
+                <button
+                  className="h-5 px-1.5 rounded text-[11px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  onClick={confirmUnstar}
+                >
+                  确认
+                </button>
+                <button
+                  className="h-5 px-1.5 rounded text-[11px] font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                  onClick={cancelUnstar}
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
             <div
               className={cn(
                 'w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-all duration-200',
@@ -297,6 +356,7 @@ export default function SidebarProjectItem({
                 )}
               />
             </div>
+            )}
             <div className="min-w-0 flex-1 text-left">
               {isEditing ? (
                 <div className="space-y-1">
