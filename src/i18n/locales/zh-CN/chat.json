@@ -8,6 +8,10 @@
     "untitled": "(无文本)",
     "question": "第{{n}}问"
   },
+  "fork": {
+    "fromHere": "从此处分叉",
+    "error": "分叉会话失败，请重试。"
+  },
   "aiQuota": {
     "title": "AI 额度",
     "refresh": "刷新",

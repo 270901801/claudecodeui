@@ -156,6 +156,10 @@
         "label": "フォントサイズ",
         "description": "エディタのフォントサイズ（ピクセル）"
       }
+    },
+    "recentSessions": {
+      "label": "表示する最近のセッション数",
+      "description": "右下のスイッチャーに表示する最近のセッションの最大数"
     }
   },
   "mcpForm": {

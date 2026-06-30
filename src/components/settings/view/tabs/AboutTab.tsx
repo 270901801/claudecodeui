@@ -1,8 +1,8 @@
-import { ExternalLink, MessageSquare, Star } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star, Cloud, Users  } from 'lucide-react';
+
 import { IS_PLATFORM } from '../../../../constants/config';
 import { useVersionCheck } from '../../../../hooks/useVersionCheck';
 import PremiumFeatureCard from '../PremiumFeatureCard';
-import { Cloud, Users } from 'lucide-react';
 
 const GITHUB_REPO_URL = 'https://github.com/siteboon/claudecodeui';
 const DOCS_URL = 'https://cloudcli.ai/docs/plugin-overview';

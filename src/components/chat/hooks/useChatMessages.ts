@@ -42,6 +42,8 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
       // Carry the normalized message id through so the DOM can expose it as a
       // stable jump anchor (data-message-id) for the conversation outline.
       id: msg.id,
+      // Bare transcript UUID, used as the node-level fork anchor.
+      messageUuid: msg.messageUuid,
       displayText: msg.displayText,
       commandName: msg.commandName,
       commandMessage: msg.commandMessage,

@@ -156,6 +156,10 @@
         "label": "字型大小",
         "description": "編輯器字型大小（px）"
       }
+    },
+    "recentSessions": {
+      "label": "最近工作階段顯示數量",
+      "description": "右下角工作階段快切器最多顯示的最近工作階段數量"
     }
   },
   "mcpForm": {

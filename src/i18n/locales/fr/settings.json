@@ -156,6 +156,10 @@
         "label": "Taille de police",
         "description": "Taille de police de l'éditeur en pixels"
       }
+    },
+    "recentSessions": {
+      "label": "Sessions récentes affichées",
+      "description": "Nombre maximal de sessions récentes affichées dans le sélecteur en bas à droite"
     }
   },
   "mcpForm": {

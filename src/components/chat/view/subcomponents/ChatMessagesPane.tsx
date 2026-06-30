@@ -24,6 +24,10 @@ interface ChatMessagesPaneProps {
   chatMessages: ChatMessage[];
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
+  /** Whether the current session supports forking (Claude only). */
+  canFork?: boolean;
+  /** Branch a new session from a message's transcript uuid. */
+  onForkAtMessage?: (messageUuid?: string | null) => void;
   provider: LLMProvider;
   setProvider: (provider: LLMProvider) => void;
   textareaRef: RefObject<HTMLTextAreaElement>;
@@ -74,6 +78,8 @@ export default function ChatMessagesPane({
   chatMessages,
   selectedSession,
   currentSessionId,
+  canFork = false,
+  onForkAtMessage,
   provider,
   setProvider,
   textareaRef,
@@ -268,6 +274,8 @@ export default function ChatMessagesPane({
                 showThinking={showThinking}
                 selectedProject={selectedProject}
                 provider={provider}
+                canFork={canFork}
+                onForkAtMessage={onForkAtMessage}
               />
             );
           })}

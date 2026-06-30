@@ -10,8 +10,9 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { ImageIcon, MessageSquareIcon, XIcon, ArrowDownIcon, Loader2 } from 'lucide-react';
+import { ImageIcon, MessageSquareIcon, XIcon, ArrowDownIcon, Loader2, BrainIcon } from 'lucide-react';
 
+import type { LLMProvider } from '../../../../types/app';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
@@ -61,6 +62,9 @@ interface ChatComposerProps {
   onAbortSession: () => void;
   permissionMode: PermissionMode | string;
   onModeSwitch: () => void;
+  provider?: LLMProvider;
+  claudeEffort?: string;
+  onCycleEffort?: () => void;
   tokenBudget: Record<string, unknown> | null;
   onShowTokenUsage: () => void;
   slashCommandsCount: number;
@@ -115,6 +119,9 @@ export default function ChatComposer({
   onAbortSession,
   permissionMode,
   onModeSwitch,
+  provider,
+  claudeEffort,
+  onCycleEffort,
   tokenBudget,
   onShowTokenUsage,
   slashCommandsCount,
@@ -380,6 +387,34 @@ export default function ChatComposer({
                 </span>
               </div>
             </button>
+
+            {provider === 'claude' && onCycleEffort && (
+              <button
+                type="button"
+                onClick={onCycleEffort}
+                className={`rounded-lg border p-2 text-xs font-medium transition-all duration-200 sm:px-2.5 sm:py-1 ${
+                  !claudeEffort
+                    ? 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted'
+                    : claudeEffort === 'low'
+                      ? 'border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-600/40 dark:bg-sky-900/15 dark:text-sky-300 dark:hover:bg-sky-900/25'
+                      : claudeEffort === 'medium'
+                        ? 'border-blue-300/60 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-600/40 dark:bg-blue-900/15 dark:text-blue-300 dark:hover:bg-blue-900/25'
+                        : claudeEffort === 'high'
+                          ? 'border-violet-300/60 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600/40 dark:bg-violet-900/15 dark:text-violet-300 dark:hover:bg-violet-900/25'
+                          : claudeEffort === 'xhigh'
+                            ? 'border-purple-300/60 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-600/40 dark:bg-purple-900/15 dark:text-purple-300 dark:hover:bg-purple-900/25'
+                            : 'border-orange-300/60 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600/40 dark:bg-orange-900/15 dark:text-orange-300 dark:hover:bg-orange-900/25'
+                }`}
+                title={t('input.clickToChangeEffort', { defaultValue: 'Click to change thinking effort' })}
+              >
+                <div className="flex items-center gap-1.5">
+                  <BrainIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="hidden whitespace-nowrap sm:inline">
+                    {claudeEffort || t('input.effortAuto', { defaultValue: 'auto' })}
+                  </span>
+                </div>
+              </button>
+            )}
 
             <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
 

@@ -5,6 +5,7 @@ import path from 'node:path';
 import spawn from 'cross-spawn';
 
 import type { IProviderAuth } from '@/shared/interfaces.js';
+import { resolveOpenCodeCliPath } from '@/shared/opencode-cli-path.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
 import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
@@ -29,8 +30,9 @@ export class OpenCodeProviderAuth implements IProviderAuth {
    * Checks whether the OpenCode CLI is available to the server process.
    */
   private checkInstalled(): boolean {
+    const cliPath = resolveOpenCodeCliPath(process.env.OPENCODE_CLI_PATH);
     try {
-      const result = spawn.sync('opencode', ['--version'], { stdio: 'ignore', timeout: 5000 });
+      const result = spawn.sync(cliPath, ['--version'], { stdio: 'ignore', timeout: 5000 });
       return !result.error && result.status === 0;
     } catch {
       return false;

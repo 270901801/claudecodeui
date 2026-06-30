@@ -156,6 +156,10 @@
         "label": "Schriftgröße",
         "description": "Editor-Schriftgröße in Pixeln"
       }
+    },
+    "recentSessions": {
+      "label": "Angezeigte letzte Sitzungen",
+      "description": "Maximale Anzahl der zuletzt verwendeten Sitzungen im Umschalter unten rechts"
     }
   },
   "mcpForm": {

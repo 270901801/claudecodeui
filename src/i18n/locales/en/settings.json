@@ -175,6 +175,10 @@
         "label": "Font Size",
         "description": "Editor font size in pixels"
       }
+    },
+    "recentSessions": {
+      "label": "Recent Sessions Shown",
+      "description": "Maximum number of recent sessions shown in the bottom-right switcher"
     }
   },
   "mcpForm": {

@@ -5,6 +5,7 @@ import type { SessionActivityMap } from '../../hooks/useSessionProtection';
 import type { PendingPermissionRequest } from '../chat/types/types';
 
 import type { RecentRanRecord } from './useRecentRanSessions';
+import { useMaxRecentSessions } from './recentSessionsLimit';
 
 export interface ActiveSessionEntry {
   sessionId: string;
@@ -82,6 +83,7 @@ export function useActiveSessionsModel({
   recent,
 }: UseActiveSessionsModelArgs) {
   const sessionMeta = useMemo(() => buildSessionMeta(projects), [projects]);
+  const maxRecent = useMaxRecentSessions();
 
   const running = useMemo<ActiveSessionEntry[]>(() => {
     const entries: ActiveSessionEntry[] = [];
@@ -112,6 +114,7 @@ export function useActiveSessionsModel({
   const recentIdle = useMemo<RecentSessionEntry[]>(() => {
     return recent
       .filter((record) => !processingSessions.has(record.sessionId))
+      .slice(0, maxRecent)
       .map((record) => {
         const meta = sessionMeta.get(record.sessionId);
         return {
@@ -124,7 +127,7 @@ export function useActiveSessionsModel({
           unviewed: Boolean(record.unviewed),
         };
       });
-  }, [recent, processingSessions, sessionMeta]);
+  }, [recent, processingSessions, sessionMeta, maxRecent]);
 
   const needsInputTotal = useMemo(
     () => running.reduce((sum, entry) => sum + entry.pendingCount, 0),

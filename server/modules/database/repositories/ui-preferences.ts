@@ -18,6 +18,8 @@ type UiPreferences = {
   sendByCtrlEnter: boolean;
   sidebarVisible: boolean;
   voiceEnabled: boolean;
+  /** Max recent (idle) sessions shown in the bottom-right capsule. */
+  maxRecentSessions: number;
 };
 
 const DEFAULT_UI_PREFERENCES: UiPreferences = {
@@ -28,19 +30,34 @@ const DEFAULT_UI_PREFERENCES: UiPreferences = {
   sendByCtrlEnter: false,
   sidebarVisible: true,
   voiceEnabled: false,
+  maxRecentSessions: 8,
 };
 
-const PREFERENCE_KEYS = Object.keys(DEFAULT_UI_PREFERENCES) as (keyof UiPreferences)[];
+// Boolean toggles share one coercion path; numeric keys are clamped separately.
+const BOOLEAN_KEYS = (Object.keys(DEFAULT_UI_PREFERENCES) as (keyof UiPreferences)[])
+  .filter((key) => typeof DEFAULT_UI_PREFERENCES[key] === 'boolean');
+
+const MIN_MAX_RECENT = 1;
+const MAX_MAX_RECENT = 50;
+
+const clampMaxRecent = (value: unknown): number | null => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.min(MAX_MAX_RECENT, Math.max(MIN_MAX_RECENT, Math.round(value)));
+};
 
 function normalizeUiPreferences(value: unknown): UiPreferences {
   const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 
-  return PREFERENCE_KEYS.reduce((acc, key) => {
+  const result = { ...DEFAULT_UI_PREFERENCES };
+  for (const key of BOOLEAN_KEYS) {
     const raw = source[key];
     // Only accept real booleans; otherwise fall back to the default for that key.
-    acc[key] = typeof raw === 'boolean' ? raw : DEFAULT_UI_PREFERENCES[key];
-    return acc;
-  }, { ...DEFAULT_UI_PREFERENCES });
+    result[key] = (typeof raw === 'boolean' ? raw : DEFAULT_UI_PREFERENCES[key]) as never;
+  }
+  result.maxRecentSessions = clampMaxRecent(source.maxRecentSessions) ?? DEFAULT_UI_PREFERENCES.maxRecentSessions;
+  return result;
 }
 
 export const uiPreferencesDb = {
@@ -78,10 +95,14 @@ export const uiPreferencesDb = {
     const incoming = partial && typeof partial === 'object' ? (partial as Record<string, unknown>) : {};
 
     const merged = { ...current };
-    for (const key of PREFERENCE_KEYS) {
+    for (const key of BOOLEAN_KEYS) {
       if (typeof incoming[key] === 'boolean') {
-        merged[key] = incoming[key] as boolean;
+        merged[key] = incoming[key] as never;
       }
+    }
+    const nextMaxRecent = clampMaxRecent(incoming.maxRecentSessions);
+    if (nextMaxRecent !== null) {
+      merged.maxRecentSessions = nextMaxRecent;
     }
 
     const db = getConnection();

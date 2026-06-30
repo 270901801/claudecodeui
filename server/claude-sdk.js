@@ -12,11 +12,13 @@
  * - WebSocket message streaming
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
 import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+
+import { query } from '@anthropic-ai/claude-agent-sdk';
+
 import { CLAUDE_FALLBACK_MODELS } from './modules/providers/list/claude/claude-models.provider.js';
 import { providerModelsService } from './modules/providers/services/provider-models.service.js';
 import { resolveClaudeCodeExecutablePath } from './shared/claude-cli-path.js';
@@ -151,7 +153,7 @@ function matchesToolPermission(entry, toolName, input) {
  * @returns {Object} SDK-compatible options
  */
 function mapCliOptionsToSDK(options = {}) {
-  const { sessionId, cwd, toolsSettings, permissionMode, forkSession, resumeSessionAt } = options;
+  const { sessionId, cwd, toolsSettings, permissionMode, forkSession, resumeSessionAt, effort } = options;
 
   const sdkOptions = {};
 
@@ -211,6 +213,10 @@ function mapCliOptionsToSDK(options = {}) {
   // Valid models: sonnet, opus, haiku, opusplan, sonnet[1m], fable
   sdkOptions.model = options.model || CLAUDE_FALLBACK_MODELS.DEFAULT;
   // Model logged at query start below
+
+  if (effort) {
+    sdkOptions.effort = effort;
+  }
 
   // Map system prompt configuration
   sdkOptions.systemPrompt = {

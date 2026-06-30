@@ -104,25 +104,6 @@ export default function ActiveSessionsCapsule({
 
   const [expanded, setExpanded] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  // Collapse when the user taps/clicks anywhere outside the capsule.
-  useEffect(() => {
-    if (!expanded) {
-      return undefined;
-    }
-    const handlePointerDown = (event: Event) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setExpanded(false);
-      }
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-    };
-  }, [expanded]);
 
   const hasRunning = running.length > 0;
   const hasRecent = recentIdle.length > 0;
@@ -169,7 +150,7 @@ export default function ActiveSessionsCapsule({
   };
 
   const capsule = (
-    <div ref={rootRef} className="fixed z-[60] flex flex-col items-end gap-2" style={containerStyle}>
+    <div className="fixed z-[60] flex flex-col items-end gap-2" style={containerStyle}>
       {expanded && (
         <div className="w-[min(92vw,22rem)] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-xl">
           <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">

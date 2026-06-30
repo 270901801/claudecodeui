@@ -1,4 +1,8 @@
 {
+  "fork": {
+    "fromHere": "從此處分叉",
+    "error": "分叉工作階段失敗，請重試。"
+  },
   "codeBlock": {
     "copy": "複製",
     "copied": "已複製",

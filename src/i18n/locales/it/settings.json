@@ -156,6 +156,10 @@
         "label": "Dimensione carattere",
         "description": "Dimensione del carattere dell'editor in pixel"
       }
+    },
+    "recentSessions": {
+      "label": "Sessioni recenti mostrate",
+      "description": "Numero massimo di sessioni recenti mostrate nel selettore in basso a destra"
     }
   },
   "mcpForm": {

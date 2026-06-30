@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+
 import { authenticatedFetch } from '../../../utils/api';
 import type { PendingPermissionRequest, PermissionMode } from '../types/types';
 import type {
@@ -93,6 +94,24 @@ export function useChatProviderState({ selectedSession, selectedProject }: UseCh
   const [opencodeModel, setOpenCodeModel] = useState<string>(() => {
     return localStorage.getItem('opencode-model') || FALLBACK_DEFAULT_MODEL.opencode;
   });
+  const [claudeEffort, setClaudeEffortState] = useState<string>(() => {
+    return localStorage.getItem('claude-effort') || '';
+  });
+
+  const setClaudeEffort = useCallback((effort: string) => {
+    setClaudeEffortState(effort);
+    if (effort) {
+      localStorage.setItem('claude-effort', effort);
+    } else {
+      localStorage.removeItem('claude-effort');
+    }
+  }, []);
+
+  const cycleClaudeEffort = useCallback(() => {
+    const levels = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+    const next = levels[(levels.indexOf(claudeEffort) + 1) % levels.length];
+    setClaudeEffort(next);
+  }, [claudeEffort, setClaudeEffort]);
 
   /**
    * Backend-owned capability matrix keyed by provider. Drives the permission
@@ -434,6 +453,9 @@ export function useChatProviderState({ selectedSession, selectedProject }: UseCh
     setGeminiModel,
     opencodeModel,
     setOpenCodeModel,
+    claudeEffort,
+    setClaudeEffort,
+    cycleClaudeEffort,
     permissionMode,
     setPermissionMode,
     pendingPermissionRequests,

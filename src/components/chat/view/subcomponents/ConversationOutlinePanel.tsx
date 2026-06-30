@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ListTree, X } from 'lucide-react';
+import { GitFork, ListTree, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '../../../../utils/api';
@@ -7,6 +7,9 @@ import { useDeviceSettings } from '../../../../hooks/useDeviceSettings';
 
 export type OutlineEntry = {
   id: string;
+  // Bare transcript UUID, passed to the fork API as the branch anchor. May be
+  // null for providers/messages that don't expose one.
+  messageUuid: string | null;
   index: number;
   timestamp: string;
   preview: string;
@@ -18,6 +21,11 @@ type ConversationOutlinePanelProps = {
   // so the outline refetches while open to stay current.
   refreshKey: number;
   onNavigate: (entry: { id: string; index: number; timestamp: string; total: number }) => void;
+  // Whether the current session supports forking (Claude only). When false the
+  // per-entry fork affordance is hidden.
+  canFork?: boolean;
+  // Branch a new session from the chosen node's transcript uuid.
+  onFork?: (messageUuid: string) => void;
 };
 
 function formatTime(timestamp: string): string {
@@ -37,6 +45,8 @@ export default function ConversationOutlinePanel({
   sessionId,
   refreshKey,
   onNavigate,
+  canFork = false,
+  onFork,
 }: ConversationOutlinePanelProps) {
   const { t } = useTranslation('chat');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
@@ -89,6 +99,12 @@ export default function ConversationOutlinePanel({
     if (isMobile) {
       setIsOpen(false);
     }
+  };
+
+  const handleEntryFork = (entry: OutlineEntry) => {
+    if (!entry.messageUuid || !onFork) return;
+    onFork(entry.messageUuid);
+    setIsOpen(false);
   };
 
   return (
@@ -147,12 +163,16 @@ export default function ConversationOutlinePanel({
               <ul className="space-y-1">
                 {entries.map((entry, position) => {
                   const time = formatTime(entry.timestamp);
+                  const canForkEntry = canFork && Boolean(entry.messageUuid) && Boolean(onFork);
                   return (
-                    <li key={entry.id || `${entry.index}-${entry.timestamp}`}>
+                    <li
+                      key={entry.id || `${entry.index}-${entry.timestamp}`}
+                      className="group/outline-entry relative flex items-stretch"
+                    >
                       <button
                         type="button"
                         onClick={() => handleEntryClick(entry)}
-                        className="group flex w-full items-start gap-2 rounded-md border border-transparent p-2 text-left transition-colors hover:border-border/60 hover:bg-accent/50"
+                        className="group flex w-full items-start gap-2 rounded-md border border-transparent p-2 pr-9 text-left transition-colors hover:border-border/60 hover:bg-accent/50"
                       >
                         <span className="mt-0.5 shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                           {t('outline.question', { defaultValue: '#{{n}}', n: position + 1 })}
@@ -166,6 +186,20 @@ export default function ConversationOutlinePanel({
                           )}
                         </span>
                       </button>
+                      {canForkEntry && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleEntryFork(entry);
+                          }}
+                          aria-label={t('fork.fromHere', { defaultValue: 'Fork from here' })}
+                          title={t('fork.fromHere', { defaultValue: 'Fork from here' })}
+                          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground focus:opacity-100 group-hover/outline-entry:opacity-100"
+                        >
+                          <GitFork className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </li>
                   );
                 })}

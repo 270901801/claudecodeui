@@ -126,6 +126,10 @@ export const api = {
   // Branches a new session from an existing one (Claude only); returns the new session metadata.
   // Pass `upToMessageId` (a transcript message UUID) to branch from a specific
   // conversation node instead of the parent's latest state.
+  /**
+   * @param {string} sessionId
+   * @param {string|null} [upToMessageId]
+   */
   forkSession: (sessionId, upToMessageId = null) =>
     authenticatedFetch(`/api/providers/sessions/${sessionId}/fork`, {
       method: 'POST',

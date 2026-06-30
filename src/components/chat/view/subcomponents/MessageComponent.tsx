@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { GitFork } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import SessionProviderLogo from '../../../llm-logo-provider/SessionProviderLogo';
@@ -35,6 +36,10 @@ type MessageComponentProps = {
   showThinking?: boolean;
   selectedProject?: Project | null;
   provider: Provider | string;
+  /** Whether the current session supports forking (Claude only). */
+  canFork?: boolean;
+  /** Branch a new session from this message's transcript uuid. */
+  onForkAtMessage?: (messageUuid?: string | null) => void;
 };
 
 type InteractiveOption = {
@@ -45,7 +50,7 @@ type InteractiveOption = {
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
 
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, autoExpandTools, showRawParameters, showThinking, selectedProject, provider }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, autoExpandTools, showRawParameters, showThinking, selectedProject, provider, canFork, onForkAtMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const isGrouped = prevMessage && prevMessage.type === message.type &&
     ((prevMessage.type === 'assistant') ||
@@ -71,6 +76,36 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
     assistantCopyContent.trim().length > 0 &&
     !isCommandOrFileEditToolResponse &&
     !message.isThinking;
+
+  // Node-level fork: branch a new session from this transcript message. Only
+  // offered on plain user/assistant text turns (not tool/thinking/prompt rows)
+  // of a fork-capable session that carries a transcript uuid.
+  const forkMessageUuid = typeof message.messageUuid === 'string' ? message.messageUuid : null;
+  const canForkMessage = Boolean(
+    canFork &&
+      forkMessageUuid &&
+      onForkAtMessage &&
+      !message.isToolUse &&
+      !message.isThinking &&
+      !message.isInteractivePrompt &&
+      !message.isTaskNotification,
+  );
+  const renderForkButton = (tone: 'user' | 'assistant') =>
+    canForkMessage ? (
+      <button
+        type="button"
+        onClick={() => onForkAtMessage?.(forkMessageUuid)}
+        aria-label={t('fork.fromHere', { defaultValue: 'Fork from here' })}
+        title={t('fork.fromHere', { defaultValue: 'Fork from here' })}
+        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors ${
+          tone === 'user'
+            ? 'text-blue-100/90 hover:bg-white/15 hover:text-white'
+            : 'hover:bg-accent hover:text-foreground'
+        }`}
+      >
+        <GitFork className="h-3 w-3" />
+      </button>
+    ) : null;
 
 
   useEffect(() => {
@@ -134,6 +169,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
               </div>
             )}
             <div className="mt-1 flex items-center justify-end gap-1 text-xs text-blue-100">
+              {renderForkButton('user')}
               {shouldShowUserCopyControl && (
                 <MessageCopyControl content={userCopyContent} messageType="user" />
               )}
@@ -429,7 +465,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
               </div>
             )}
 
-            {(shouldShowAssistantCopyControl || !isGrouped) && (
+            {(shouldShowAssistantCopyControl || canForkMessage || !isGrouped) && (
               <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
                 {shouldShowAssistantCopyControl && (
                   <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
@@ -437,6 +473,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
                 {shouldShowAssistantCopyControl && (
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
+                {renderForkButton('assistant')}
                 {!isGrouped && <span>{formattedTime}</span>}
               </div>
             )}

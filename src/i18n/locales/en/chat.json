@@ -8,6 +8,10 @@
     "untitled": "(no text)",
     "question": "#{{n}}"
   },
+  "fork": {
+    "fromHere": "Fork from here",
+    "error": "Error forking session. Please try again."
+  },
   "aiQuota": {
     "title": "AI quota",
     "refresh": "Refresh",

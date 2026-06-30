@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { SessionActivityMap } from '../../hooks/useSessionProtection';
 
 const STORAGE_KEY = 'active-sessions:recent-ran';
-const MAX_RECENT = 8;
+// Upper bound the persisted list can ever grow to; the visible count is capped
+// separately by the user-configurable limit (see {@link useMaxRecentSessions}).
+const MAX_RECENT = 50;
 
 export interface RecentRanRecord {
   sessionId: string;

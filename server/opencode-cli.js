@@ -8,6 +8,7 @@ import { sessionsService } from './modules/providers/services/sessions.service.j
 import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
 import { providerModelsService } from './modules/providers/services/provider-models.service.js';
 import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
+import { resolveOpenCodeCliPath } from './shared/opencode-cli-path.js';
 import { createCompleteMessage, createNormalizedMessage, getOpenCodeDatabasePath } from './shared/utils.js';
 
 const spawnFunction = process.platform === 'win32' ? crossSpawn : spawn;
@@ -193,6 +194,7 @@ async function spawnOpenCode(command, options = {}, ws) {
     };
 
     void providerModelsService.resolveResumeModel('opencode', sessionId, model).then((resolvedModel) => {
+      const openCodeCliPath = resolveOpenCodeCliPath(process.env.OPENCODE_CLI_PATH);
       const args = ['run', '--format', 'json'];
       // OpenCode's `run` command owns workspace selection through `--dir`.
       // Relying on the child-process cwd alone is not enough on Linux, where
@@ -208,7 +210,7 @@ async function spawnOpenCode(command, options = {}, ws) {
         args.push(command.trim());
       }
 
-      opencodeProcess = spawnFunction('opencode', args, {
+      opencodeProcess = spawnFunction(openCodeCliPath, args, {
         cwd: workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env },

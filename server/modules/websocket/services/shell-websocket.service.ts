@@ -6,6 +6,7 @@ import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
 import { parseIncomingJsonObject } from '@/shared/utils.js';
+import { resolveOpenCodeCliPath } from '@/shared/opencode-cli-path.js';
 
 type ShellIncomingMessage = {
   type?: string;
@@ -81,6 +82,10 @@ function parseShellMessage(rawMessage: RawData): ShellIncomingMessage | null {
 
 function readClaudeShellCommand(): string {
   return process.env.CLAUDE_CLI_PATH?.trim() || 'claude';
+}
+
+function readOpenCodeShellCommand(): string {
+  return resolveOpenCodeCliPath(process.env.OPENCODE_CLI_PATH);
 }
 
 const SAFE_SESSION_ID_PATTERN = /^[a-zA-Z0-9_.\-:]+$/;
@@ -159,10 +164,11 @@ function buildShellCommand(
   }
 
   if (provider === 'opencode') {
+    const command = initialCommand || readOpenCodeShellCommand();
     if (resumeSessionId) {
-      return `opencode --session "${resumeSessionId}"`;
+      return `${command} --session "${resumeSessionId}"`;
     }
-    return initialCommand || 'opencode';
+    return command;
   }
 
   const command = initialCommand || readClaudeShellCommand();

@@ -18,6 +18,7 @@ import {
   readOptionalString,
   writeProviderSessionActiveModelChange,
 } from '@/shared/utils.js';
+import { resolveOpenCodeCliPath } from '@/shared/opencode-cli-path.js';
 
 export const OPENCODE_FALLBACK_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
@@ -213,8 +214,8 @@ const parseOpenCodeSessionModelValue = (rawModel: unknown): string | null => {
     ?? null;
 };
 
-const runOpenCodeModelsCommand = (): Promise<string> => new Promise((resolve, reject) => {
-  const openCodeProcess = spawnFunction('opencode', ['models'], {
+const runOpenCodeModelsCommand = (args: string[]): Promise<string> => new Promise((resolve, reject) => {
+  const openCodeProcess = spawnFunction(resolveOpenCodeCliPath(process.env.OPENCODE_CLI_PATH), args, {
     cwd: process.cwd(),
     env: { ...process.env },
   });
@@ -269,11 +270,25 @@ const runOpenCodeModelsCommand = (): Promise<string> => new Promise((resolve, re
   });
 });
 
+const readOpenCodeModelIds = async (): Promise<string[]> => {
+  try {
+    const pureStdout = await runOpenCodeModelsCommand(['models', '--pure']);
+    const pureIds = parseOpenCodeModelsStdout(pureStdout);
+    if (pureIds.length > 0) {
+      return pureIds;
+    }
+  } catch {
+    // Fall through to OpenCode's full model discovery when pure mode is not available.
+  }
+
+  const stdout = await runOpenCodeModelsCommand(['models']);
+  return parseOpenCodeModelsStdout(stdout);
+};
+
 export class OpenCodeProviderModels implements IProviderModels {
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
     try {
-      const stdout = await runOpenCodeModelsCommand();
-      const ids = parseOpenCodeModelsStdout(stdout);
+      const ids = await readOpenCodeModelIds();
       if (ids.length === 0) {
         return OPENCODE_FALLBACK_MODELS;
       }

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { api } from '../../../utils/api';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import PermissionContext from '../../../contexts/PermissionContext';
@@ -77,6 +78,8 @@ function ChatInterface({
     setGeminiModel,
     opencodeModel,
     setOpenCodeModel,
+    claudeEffort,
+    cycleClaudeEffort,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -147,6 +150,42 @@ function ChatInterface({
     onNavigateToSession?.(sessionId);
   }, [setCurrentSessionId, onSessionEstablished, onNavigateToSession]);
 
+  // Fork-only-Claude: branch the current conversation into a new session. When a
+  // transcript node uuid is given the branch continues from that point (the SDK
+  // resumes the parent up to that message); otherwise it forks the latest state.
+  // The new session row exists immediately, so navigating to it opens an empty
+  // chat that materializes its branched history on the first message.
+  const canFork = provider === 'claude';
+  const handleForkAtMessage = useCallback(async (messageUuid?: string | null) => {
+    const sourceSessionId = currentSessionId || selectedSession?.id;
+    if (!sourceSessionId) return;
+    try {
+      const response = await api.forkSession(sourceSessionId, messageUuid ?? null);
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string | { message?: string };
+        };
+        const err = payload.error;
+        const message =
+          typeof err === 'string'
+            ? err
+            : err && typeof err === 'object' && err.message
+              ? err.message
+              : t('fork.error', { defaultValue: 'Error forking session. Please try again.' });
+        window.alert(message);
+        return;
+      }
+      const payload = (await response.json()) as { data?: { sessionId?: string } };
+      const newSessionId = payload.data?.sessionId;
+      if (newSessionId) {
+        onNavigateToSession?.(newSessionId);
+      }
+    } catch (error) {
+      console.error('[Chat] Error forking session:', error);
+      window.alert(t('fork.error', { defaultValue: 'Error forking session. Please try again.' }));
+    }
+  }, [currentSessionId, selectedSession, onNavigateToSession, t]);
+
   const {
     input,
     setInput,
@@ -204,6 +243,7 @@ function ChatInterface({
     codexModel,
     geminiModel,
     opencodeModel,
+    claudeEffort,
     isLoading: isProcessing,
     canAbortSession,
     tokenBudget,
@@ -319,6 +359,8 @@ function ChatInterface({
           sessionId={currentSessionId || selectedSession?.id || null}
           refreshKey={chatMessages.length}
           onNavigate={navigateToOutlineEntry}
+          canFork={canFork}
+          onFork={handleForkAtMessage}
         />
         <AiQuotaPanel />
         <ChatMessagesPane
@@ -330,6 +372,8 @@ function ChatInterface({
           chatMessages={chatMessages}
           selectedSession={selectedSession}
           currentSessionId={currentSessionId}
+          canFork={canFork}
+          onForkAtMessage={handleForkAtMessage}
           provider={provider}
           setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
           textareaRef={textareaRef}
@@ -380,6 +424,9 @@ function ChatInterface({
           onAbortSession={handleAbortSession}
           permissionMode={permissionMode}
           onModeSwitch={cyclePermissionMode}
+          provider={provider}
+          claudeEffort={claudeEffort}
+          onCycleEffort={cycleClaudeEffort}
           tokenBudget={tokenBudget}
           onShowTokenUsage={showCostModal}
           slashCommandsCount={slashCommandsCount}

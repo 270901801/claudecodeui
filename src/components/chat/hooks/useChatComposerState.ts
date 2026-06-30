@@ -39,6 +39,7 @@ interface UseChatComposerStateArgs {
   codexModel: string;
   geminiModel: string;
   opencodeModel: string;
+  claudeEffort?: string;
   isLoading: boolean;
   canAbortSession: boolean;
   tokenBudget: Record<string, unknown> | null;
@@ -186,6 +187,7 @@ export function useChatComposerState({
   codexModel,
   geminiModel,
   opencodeModel,
+  claudeEffort,
   isLoading,
   canAbortSession,
   tokenBudget,
@@ -735,6 +737,7 @@ export function useChatComposerState({
         content: messageContent,
         options: {
           model,
+          effort: provider === 'claude' && claudeEffort ? claudeEffort : undefined,
           // Codex has no plan mode; downgrade rather than sending an
           // unsupported value to its runtime.
           permissionMode: provider === 'codex' && permissionMode === 'plan' ? 'default' : permissionMode,

@@ -33,6 +33,8 @@ export interface SubagentChildTool {
 export interface ChatMessage {
   type: string;
   content?: string;
+  /** Bare transcript UUID, used as the node-level fork anchor. */
+  messageUuid?: string;
   displayText?: string;
   timestamp: string | number | Date;
   images?: ChatImage[];

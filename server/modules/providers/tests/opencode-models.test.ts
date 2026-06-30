@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
   buildOpenCodeDefinitionFromIds,
+  OpenCodeProviderModels,
   parseOpenCodeModelsStdout,
 } from '@/modules/providers/list/opencode/opencode-models.provider.js';
 
@@ -20,6 +24,43 @@ openai/gpt-5.5-pro
     'anthropic/claude-opus-4-7-fast',
     'openai/gpt-5.5-pro',
   ]);
+});
+
+test('OpenCode models provider keeps local configured models when full discovery fails', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'opencode-models-provider-'));
+  const fakeOpenCodePath = path.join(tempRoot, 'opencode');
+  const originalOpenCodeCliPath = process.env.OPENCODE_CLI_PATH;
+
+  await writeFile(fakeOpenCodePath, `#!/bin/sh
+if [ "$1" = "models" ] && [ "$2" = "--pure" ]; then
+  printf '%s\\n' 'glm/glm-5.1' 'test111/glm5.1'
+  exit 0
+fi
+if [ "$1" = "models" ]; then
+  echo 'models.dev unavailable' >&2
+  exit 1
+fi
+exit 0
+`, 'utf8');
+  await chmod(fakeOpenCodePath, 0o755);
+
+  try {
+    process.env.OPENCODE_CLI_PATH = fakeOpenCodePath;
+    const models = await new OpenCodeProviderModels().getSupportedModels();
+
+    assert.deepEqual(models.OPTIONS.map((option) => option.value), [
+      'glm/glm-5.1',
+      'test111/glm5.1',
+    ]);
+    assert.equal(models.DEFAULT, 'glm/glm-5.1');
+  } finally {
+    if (originalOpenCodeCliPath === undefined) {
+      delete process.env.OPENCODE_CLI_PATH;
+    } else {
+      process.env.OPENCODE_CLI_PATH = originalOpenCodeCliPath;
+    }
+    await rm(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('OpenCode models provider formats frontend labels from provider-prefixed ids', () => {

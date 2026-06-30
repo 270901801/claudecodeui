@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 
 import type {
@@ -23,13 +23,12 @@ import {
   Card,
 } from "../../../../shared/view/ui";
 
-const PROVIDER_META: { id: LLMProvider; name: string }[] = [
-  { id: "claude", name: "Anthropic" },
-  { id: "codex", name: "OpenAI" },
-  { id: "gemini", name: "Google" },
-  { id: "cursor", name: "Cursor" },
-  { id: "opencode", name: "OpenCode" },
-];
+import {
+  buildProviderSelectionGroups,
+  createInitialCollapsedProviderSet,
+  shouldProviderGroupRenderExpanded,
+  type ProviderSelectionGroup,
+} from "./providerSelectionGroups";
 
 const MOD_KEY =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
@@ -56,12 +55,6 @@ type ProviderSelectionEmptyStateProps = {
   isTaskMasterInstalled: boolean | null;
   onShowAllTasks?: (() => void) | null;
   setInput: React.Dispatch<React.SetStateAction<string>>;
-};
-
-type ProviderGroup = {
-  id: LLMProvider;
-  name: string;
-  models: { value: string; label: string; description?: string }[];
 };
 
 function getModelConfig(
@@ -120,14 +113,39 @@ export default function ProviderSelectionEmptyState({
 }: ProviderSelectionEmptyStateProps) {
   const { t } = useTranslation("chat");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [modelSearchQuery, setModelSearchQuery] = useState("");
+  const [collapsedProviders, setCollapsedProviders] = useState<Set<LLMProvider>>(new Set());
+  const defaultCollapsedAppliedRef = useRef(false);
 
-  const visibleProviderGroups = useMemo<ProviderGroup[]>(() => {
-    return PROVIDER_META.map((p) => ({
-      id: p.id,
-      name: p.name,
-      models: providerModelCatalog[p.id]?.OPTIONS ?? [],
-    }));
+  const visibleProviderGroups = useMemo<ProviderSelectionGroup[]>(() => {
+    return buildProviderSelectionGroups(providerModelCatalog);
   }, [providerModelCatalog]);
+
+  useEffect(() => {
+    if (defaultCollapsedAppliedRef.current) {
+      return;
+    }
+
+    const hasLoadedAnyModels = visibleProviderGroups.some((group) => group.models.length > 0);
+    if (!hasLoadedAnyModels) {
+      return;
+    }
+
+    setCollapsedProviders(createInitialCollapsedProviderSet(visibleProviderGroups, provider));
+    defaultCollapsedAppliedRef.current = true;
+  }, [provider, visibleProviderGroups]);
+
+  useEffect(() => {
+    setCollapsedProviders((current) => {
+      if (!current.has(provider)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.delete(provider);
+      return next;
+    });
+  }, [provider]);
 
   const nextTaskPrompt = t("tasks.nextTaskPrompt", {
     defaultValue: "Start the next task",
@@ -183,6 +201,18 @@ export default function ProviderSelectionEmptyState({
     [setProvider, setModelForProvider, textareaRef],
   );
 
+  const handleToggleProviderGroup = useCallback((providerId: LLMProvider) => {
+    setCollapsedProviders((current) => {
+      const next = new Set(current);
+      if (next.has(providerId)) {
+        next.delete(providerId);
+      } else {
+        next.add(providerId);
+      }
+      return next;
+    });
+  }, []);
+
   if (!selectedSession && !currentSessionId) {
     return (
       <div className="flex h-full items-center justify-center px-4">
@@ -196,7 +226,15 @@ export default function ProviderSelectionEmptyState({
             </p>
           </div>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) {
+                setModelSearchQuery("");
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Card
                 className="group mx-auto max-w-xs cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
@@ -236,6 +274,8 @@ export default function ProviderSelectionEmptyState({
               </div>
               <Command>
                 <CommandInput
+                  value={modelSearchQuery}
+                  onValueChange={setModelSearchQuery}
                   placeholder={t("providerSelection.searchModels", {
                     defaultValue: "Search models...",
                   })}
@@ -254,19 +294,36 @@ export default function ProviderSelectionEmptyState({
                           ? "border-t border-border/40 [&_[cmdk-group-heading]]:mt-1 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
                           : "[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
                       }
-                      heading={
-                        <span className="flex items-center gap-1.5">
-                          <SessionProviderLogo provider={group.id} className="h-3.5 w-3.5 shrink-0" />
-                          {group.name}
-                        </span>
-                      }
+                      heading={(
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleToggleProviderGroup(group.id);
+                          }}
+                          className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-0.5 text-left"
+                          aria-label={`Toggle ${group.name} models`}
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <SessionProviderLogo provider={group.id} className="h-3.5 w-3.5 shrink-0" />
+                            <span>{group.name}</span>
+                            <span className="text-[10px] text-muted-foreground/80">{group.models.length}</span>
+                          </span>
+                          {shouldProviderGroupRenderExpanded(group.id, collapsedProviders, modelSearchQuery) ? (
+                            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          )}
+                        </button>
+                      )}
                     >
-                      {group.models.length === 0 && providerModelsLoading ? (
+                      {shouldProviderGroupRenderExpanded(group.id, collapsedProviders, modelSearchQuery) && group.models.length === 0 && providerModelsLoading ? (
                         <CommandItem disabled className="ml-4 border-l border-border/40 pl-4 text-muted-foreground">
                           {t("providerSelection.loadingModels", { defaultValue: "Loading models…" })}
                         </CommandItem>
                       ) : null}
-                      {group.models.map((model) => {
+                      {shouldProviderGroupRenderExpanded(group.id, collapsedProviders, modelSearchQuery) ? group.models.map((model) => {
                         const isSelected = provider === group.id && currentModel === model.value;
                         return (
                           <CommandItem
@@ -277,22 +334,13 @@ export default function ProviderSelectionEmptyState({
                           >
                             <div className="min-w-0 flex-1">
                               <div className="truncate">{model.label}</div>
-                              {/* 
-                              // * Temporarly commented out because the description of models from claude 
-                              // * was a bit inconsistent.  Will return it back when it becomes more consistent.
-                              */}
-                              {/* {model.description && (
-                                <div className="truncate text-xs text-muted-foreground">
-                                  {model.description}
-                                </div>
-                              )} */}
                             </div>
                             {isSelected && (
                               <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
                             )}
                           </CommandItem>
                         );
-                      })}
+                      }) : null}
                     </CommandGroup>
                   ))}
                 </CommandList>

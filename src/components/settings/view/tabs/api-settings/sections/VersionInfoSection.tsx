@@ -1,4 +1,5 @@
 import { ExternalLink, Star, MessageSquare } from 'lucide-react';
+
 import { IS_PLATFORM } from '../../../../../../constants/config';
 import type { ReleaseInfo } from '../../../../../../types/sharedTypes';
 

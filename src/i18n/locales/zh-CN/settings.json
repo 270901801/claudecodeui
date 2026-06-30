@@ -156,6 +156,10 @@
         "label": "字体大小",
         "description": "编辑器字体大小（px）"
       }
+    },
+    "recentSessions": {
+      "label": "最近会话显示数量",
+      "description": "右下角会话快切器最多显示的最近会话个数"
     }
   },
   "mcpForm": {

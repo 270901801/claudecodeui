@@ -156,6 +156,10 @@
         "label": "Yazı Tipi Boyutu",
         "description": "Editör yazı tipi boyutu (piksel)"
       }
+    },
+    "recentSessions": {
+      "label": "Gösterilen son oturumlar",
+      "description": "Sağ alttaki geçiş aracında gösterilen en fazla son oturum sayısı"
     }
   },
   "mcpForm": {
