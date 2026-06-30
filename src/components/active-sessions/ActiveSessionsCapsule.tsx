@@ -69,11 +69,13 @@ const PROVIDER_LABEL: Record<string, string> = {
 const providerLabel = (provider: string | null): string | null =>
   provider ? PROVIDER_LABEL[provider] ?? provider : null;
 
-const POSITION_STORAGE_KEY = 'active-sessions:capsule-position';
+// v3: uses right+bottom (distance from viewport edges) so the button's bottom-right
+// corner stays fixed when the panel expands in either direction.
+const POSITION_STORAGE_KEY = 'active-sessions:capsule-position-v3';
 
 interface CapsulePosition {
-  x: number;
-  y: number;
+  right: number;
+  bottom: number;
 }
 
 const loadPosition = (): CapsulePosition | null => {
@@ -86,8 +88,8 @@ const loadPosition = (): CapsulePosition | null => {
       return null;
     }
     const parsed = JSON.parse(raw) as Partial<CapsulePosition>;
-    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-      return { x: parsed.x, y: parsed.y };
+    if (typeof parsed?.right === 'number' && typeof parsed?.bottom === 'number') {
+      return { right: parsed.right, bottom: parsed.bottom };
     }
   } catch {
     // Malformed value — fall back to the default corner.
@@ -156,8 +158,8 @@ export default function ActiveSessionsCapsule({
     pointerId: number;
     startX: number;
     startY: number;
-    originLeft: number;
-    originTop: number;
+    originRight: number;
+    originBottom: number;
     moved: boolean;
   } | null>(null);
   // Set briefly after a real drag so the trailing click doesn't toggle the panel.
@@ -176,8 +178,8 @@ export default function ActiveSessionsCapsule({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      originLeft: rect.left,
-      originTop: rect.top,
+      originRight: window.innerWidth - rect.right,
+      originBottom: window.innerHeight - rect.bottom,
       moved: false,
     };
     setDragging(true);
@@ -204,11 +206,13 @@ export default function ActiveSessionsCapsule({
     const el = containerRef.current;
     const width = el?.offsetWidth ?? 0;
     const height = el?.offsetHeight ?? 0;
-    const maxLeft = Math.max(0, window.innerWidth - width);
-    const maxTop = Math.max(0, window.innerHeight - height);
-    const x = Math.min(Math.max(0, state.originLeft + dx), maxLeft);
-    const y = Math.min(Math.max(0, state.originTop + dy), maxTop);
-    setPosition({ x, y });
+    const maxRight = Math.max(0, window.innerWidth - width);
+    const maxBottom = Math.max(0, window.innerHeight - height);
+    // Dragging right (dx > 0) → right distance decreases; left (dx < 0) → increases.
+    const right = Math.min(Math.max(0, state.originRight - dx), maxRight);
+    // Dragging down (dy > 0) → bottom decreases; up (dy < 0) → bottom increases.
+    const bottom = Math.min(Math.max(0, state.originBottom - dy), maxBottom);
+    setPosition({ right, bottom });
   };
 
   const handleDragPointerUp = (event: React.PointerEvent) => {
@@ -267,9 +271,10 @@ export default function ActiveSessionsCapsule({
     prevNeedsInputRef.current = needsInputTotal;
   }, [needsInputTotal]);
 
-  // Tapping anywhere outside the capsule collapses the expanded panel.
+  // On mobile, tapping anywhere outside the capsule collapses the expanded panel.
+  // On desktop the user closes it explicitly with the chevron button.
   useEffect(() => {
-    if (!expanded) {
+    if (!expanded || !isMobile) {
       return undefined;
     }
     const handlePointerDown = (event: PointerEvent) => {
@@ -280,7 +285,7 @@ export default function ActiveSessionsCapsule({
     };
     document.addEventListener('pointerdown', handlePointerDown, true);
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [expanded]);
+  }, [expanded, isMobile]);
 
   // Reflect the running count on the installed-PWA app icon.
   useEffect(() => {
@@ -309,9 +314,9 @@ export default function ActiveSessionsCapsule({
         if (!prev) {
           return prev;
         }
-        const x = Math.min(prev.x, Math.max(0, window.innerWidth - width));
-        const y = Math.min(prev.y, Math.max(0, window.innerHeight - height));
-        return x === prev.x && y === prev.y ? prev : { x, y };
+        const right = Math.min(prev.right, Math.max(0, window.innerWidth - width));
+        const bottom = Math.min(prev.bottom, Math.max(0, window.innerHeight - height));
+        return right === prev.right && bottom === prev.bottom ? prev : { right, bottom };
       });
     };
     window.addEventListener('resize', onResize);
@@ -330,7 +335,7 @@ export default function ActiveSessionsCapsule({
 
   const containerStyle: React.CSSProperties = {
     ...(position
-      ? { left: position.x, top: position.y }
+      ? { right: position.right, bottom: position.bottom }
       : {
           bottom: `calc(env(safe-area-inset-bottom, 0px) + ${isMobile ? '5rem' : '1.25rem'})`,
           right: isMobile ? '0.75rem' : '1.25rem',
