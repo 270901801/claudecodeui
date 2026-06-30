@@ -62,6 +62,7 @@ import projectModuleRoutes from './modules/projects/projects.routes.js';
 import userRoutes from './routes/user.js';
 import geminiRoutes from './routes/gemini.js';
 import pluginsRoutes from './routes/plugins.js';
+import schedulerRoutes from './routes/scheduler.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import voiceRoutes from './voice-proxy.js';
 import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
@@ -70,6 +71,7 @@ import { browserUseService } from './modules/browser-use/browser-use.service.js'
 import { startEnabledPluginServers, stopAllPlugins, getPluginPort } from './utils/plugin-process-manager.js';
 import { initializeDatabase, projectsDb, sessionsDb } from './modules/database/index.js';
 import { configureWebPush } from './services/vapid-keys.js';
+import { startScheduler, stopScheduler } from './services/scheduler.service.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { IS_PLATFORM } from './constants/config.js';
 import { c } from './utils/colors.js';
@@ -214,6 +216,8 @@ app.use('/api/gemini', authenticateToken, geminiRoutes);
 
 // Plugins API Routes (protected)
 app.use('/api/plugins', authenticateToken, pluginsRoutes);
+
+app.use('/api/scheduler', authenticateToken, schedulerRoutes);
 
 // Browser MCP bridge API (local token protected)
 app.use('/api/browser-use-mcp', browserUseMcpRoutes);
@@ -1730,11 +1734,19 @@ async function startServer() {
             startEnabledPluginServers().catch(err => {
                 console.error('[Plugins] Error during startup:', err.message);
             });
+
+            // Start the long-horizon task scheduler tick loop.
+            startScheduler();
         });
 
         await closeSessionsWatcher();
         // Clean up plugin processes on shutdown
         const shutdownRuntimeServices = async () => {
+            try {
+                stopScheduler();
+            } catch (err) {
+                console.error('[Scheduler] Error stopping scheduler during shutdown:', err?.message || err);
+            }
             try {
                 await browserUseService.stopAllSessions();
             } catch (err) {

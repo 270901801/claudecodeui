@@ -8,6 +8,7 @@ export { notificationPreferencesDb } from '@/modules/database/repositories/notif
 export { projectsDb } from '@/modules/database/repositories/projects.db.js';
 export { pushSubscriptionsDb } from '@/modules/database/repositories/push-subscriptions.js';
 export { scanStateDb } from '@/modules/database/repositories/scan-state.db.js';
+export { scheduledTasksDb } from '@/modules/database/repositories/scheduled-tasks.db.js';
 export { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
 export { uiPreferencesDb } from '@/modules/database/repositories/ui-preferences.js';
 export { userDb } from '@/modules/database/repositories/users.js';

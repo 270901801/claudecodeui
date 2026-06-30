@@ -5,6 +5,8 @@ import {
   LAST_SCANNED_AT_SQL,
   PROJECTS_TABLE_SCHEMA_SQL,
   PUSH_SUBSCRIPTIONS_TABLE_SCHEMA_SQL,
+  SCHEDULED_TASK_UNITS_TABLE_SCHEMA_SQL,
+  SCHEDULED_TASKS_TABLE_SCHEMA_SQL,
   SESSIONS_TABLE_SCHEMA_SQL,
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
   VAPID_KEYS_TABLE_SCHEMA_SQL,
@@ -487,6 +489,14 @@ export const runMigrations = (db: Database) => {
     }
 
     db.exec(LAST_SCANNED_AT_SQL);
+
+    // Long-horizon scheduler tables (idempotent; CREATE TABLE IF NOT EXISTS).
+    db.exec(SCHEDULED_TASKS_TABLE_SCHEMA_SQL);
+    db.exec(SCHEDULED_TASK_UNITS_TABLE_SCHEMA_SQL);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due ON scheduled_tasks(status, next_run_at)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_user ON scheduled_tasks(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_scheduled_task_units_task ON scheduled_task_units(task_id, seq)');
+
     console.log('Database migrations completed successfully');
   } catch (error: any) {
     console.error('Error running migrations:', error.message);

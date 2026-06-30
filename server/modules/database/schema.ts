@@ -134,6 +134,61 @@ CREATE TABLE IF NOT EXISTS app_config (
 );
 `;
 
+// Long-horizon scheduler: a queued/scheduled task that runs unattended and
+// auto-suspends when model quota is exhausted, resuming at the next reset.
+// All timestamps are epoch milliseconds (INTEGER) for easy JS interop.
+// `next_run_at` is the single scheduling cursor: when the tick loop should next
+// consider this task — used by delay (not-before), cron (next fire) and
+// quota_blocked (resets_at) alike.
+export const SCHEDULED_TASKS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS scheduled_tasks (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL,
+    project_path TEXT NOT NULL,
+    title TEXT NOT NULL,
+    -- 'single_prompt' (one unit) | 'taskmaster' (multi unit, later slice)
+    mode TEXT NOT NULL DEFAULT 'single_prompt',
+    prompt TEXT,
+    -- 'asap' | 'delay' | 'cron'
+    trigger_type TEXT NOT NULL DEFAULT 'asap',
+    cron_expr TEXT,
+    -- 'whitelist' (default, programmatic policy) | 'read_only' | 'bypass'
+    auth_policy TEXT NOT NULL DEFAULT 'whitelist',
+    model TEXT,
+    max_retries INTEGER NOT NULL DEFAULT 3,
+    -- pending | running | quota_blocked | waiting_interactive | done | failed | cancelled
+    status TEXT NOT NULL DEFAULT 'pending',
+    next_run_at INTEGER,
+    last_error TEXT,
+    consecutive_failures INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`;
+
+// A resumable execution unit of a scheduled task. single_prompt tasks have
+// exactly one unit; taskmaster tasks have one per subtask. Quota断了从下一个
+// pending unit 续跑, completed units never re-run.
+export const SCHEDULED_TASK_UNITS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS scheduled_task_units (
+    id TEXT PRIMARY KEY NOT NULL,
+    task_id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    -- Captured Claude session ids: provider-native (for --resume) and the
+    -- app-facing id the UI uses to show this unit's transcript.
+    provider_session_id TEXT,
+    app_session_id TEXT,
+    -- pending | running | done | failed | skipped
+    status TEXT NOT NULL DEFAULT 'pending',
+    result_summary TEXT,
+    started_at INTEGER,
+    completed_at INTEGER,
+    FOREIGN KEY (task_id) REFERENCES scheduled_tasks(id) ON DELETE CASCADE
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -175,4 +230,11 @@ CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id);
 ${LAST_SCANNED_AT_SQL}
 
 ${APP_CONFIG_TABLE_SCHEMA_SQL}
+
+${SCHEDULED_TASKS_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_due ON scheduled_tasks(status, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_user ON scheduled_tasks(user_id);
+
+${SCHEDULED_TASK_UNITS_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_scheduled_task_units_task ON scheduled_task_units(task_id, seq);
 `;

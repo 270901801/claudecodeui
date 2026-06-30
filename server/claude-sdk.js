@@ -606,6 +606,27 @@ async function queryClaudeSDK(command, options = {}, ws) {
     sdkOptions.canUseTool = async (toolName, input, context) => {
       const requiresInteraction = TOOLS_REQUIRING_INTERACTION.has(toolName);
 
+      // Unattended runs (e.g. the long-horizon scheduler) supply a programmatic
+      // `autoApprove(toolName, input) -> { allow, message }`. There is no human
+      // to answer a permission prompt, so we resolve every tool here and never
+      // fall through to the interactive ws request/wait path. Interactive tools
+      // are denied outright since they cannot be answered.
+      if (typeof options.autoApprove === 'function') {
+        if (requiresInteraction) {
+          return { behavior: 'deny', message: 'Interactive tools are unavailable in unattended runs' };
+        }
+        let decision;
+        try {
+          decision = await options.autoApprove(toolName, input);
+        } catch (err) {
+          return { behavior: 'deny', message: `Auto-approval error: ${err?.message || err}` };
+        }
+        if (decision && decision.allow) {
+          return { behavior: 'allow', updatedInput: input };
+        }
+        return { behavior: 'deny', message: decision?.message || 'Denied by scheduler auth policy' };
+      }
+
       if (!requiresInteraction) {
         if (sdkOptions.permissionMode === 'bypassPermissions') {
           return { behavior: 'allow', updatedInput: input };
