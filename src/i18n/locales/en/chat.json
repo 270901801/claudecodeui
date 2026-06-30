@@ -126,6 +126,14 @@
       "bypassPermissions": "Full system access with no restrictions. All commands run automatically with full disk and network access. Use with caution.",
       "plan": "Planning mode - no commands are executed"
     },
+    "speed": {
+      "ariaLabel": "Codex speed {{speed}}",
+      "toggle": "Toggle Codex 1.5x speed"
+    },
+    "reasoning": {
+      "ariaLabel": "Codex reasoning {{effort}}",
+      "toggle": "Click to change Codex reasoning effort"
+    },
     "technicalDetails": "Technical details"
   },
   "gemini": {

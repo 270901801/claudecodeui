@@ -125,6 +125,14 @@
       "bypassPermissions": "完全的系统访问，无限制。所有命令自动运行，具有完整的磁盘和网络访问权限。请谨慎使用。",
       "plan": "计划模式 - 不执行任何命令"
     },
+    "speed": {
+      "ariaLabel": "Codex 速度 {{speed}}",
+      "toggle": "切换 Codex 1.5x 速度"
+    },
+    "reasoning": {
+      "ariaLabel": "Codex 推理强度 {{effort}}",
+      "toggle": "切换 Codex 推理强度"
+    },
     "technicalDetails": "技术细节"
   },
   "input": {

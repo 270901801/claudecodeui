@@ -8,6 +8,8 @@ import type {
 export type Provider = LLMProvider;
 
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'bypassPermissions' | 'plan';
+export type CodexServiceTier = 'default' | 'fast';
+export type CodexReasoningEffort = '' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export interface ChatImage {
   data: string;

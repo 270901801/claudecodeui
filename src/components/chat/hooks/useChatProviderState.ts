@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { authenticatedFetch } from '../../../utils/api';
-import type { PendingPermissionRequest, PermissionMode } from '../types/types';
+import type { CodexReasoningEffort, CodexServiceTier, PendingPermissionRequest, PermissionMode } from '../types/types';
 import type {
   ProjectSession,
   LLMProvider,
@@ -31,6 +31,16 @@ const FALLBACK_PERMISSION_MODES: Record<LLMProvider, PermissionMode[]> = {
   gemini: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   opencode: ['default'],
 };
+
+const CODEX_SERVICE_TIER_STORAGE_KEY = 'codex-service-tier';
+const CODEX_REASONING_EFFORT_STORAGE_KEY = 'codex-reasoning-effort';
+const CODEX_REASONING_EFFORTS: CodexReasoningEffort[] = ['', 'low', 'medium', 'high', 'xhigh'];
+
+function normalizeCodexReasoningEffort(value: string | null): CodexReasoningEffort {
+  return CODEX_REASONING_EFFORTS.includes(value as CodexReasoningEffort)
+    ? value as CodexReasoningEffort
+    : '';
+}
 
 type ProviderCapabilities = {
   provider: LLMProvider;
@@ -88,6 +98,12 @@ export function useChatProviderState({ selectedSession, selectedProject }: UseCh
   const [codexModel, setCodexModel] = useState<string>(() => {
     return localStorage.getItem('codex-model') || FALLBACK_DEFAULT_MODEL.codex;
   });
+  const [codexServiceTier, setCodexServiceTierState] = useState<CodexServiceTier>(() => {
+    return localStorage.getItem(CODEX_SERVICE_TIER_STORAGE_KEY) === 'fast' ? 'fast' : 'default';
+  });
+  const [codexReasoningEffort, setCodexReasoningEffortState] = useState<CodexReasoningEffort>(() => {
+    return normalizeCodexReasoningEffort(localStorage.getItem(CODEX_REASONING_EFFORT_STORAGE_KEY));
+  });
   const [geminiModel, setGeminiModel] = useState<string>(() => {
     return localStorage.getItem('gemini-model') || FALLBACK_DEFAULT_MODEL.gemini;
   });
@@ -106,6 +122,34 @@ export function useChatProviderState({ selectedSession, selectedProject }: UseCh
       localStorage.removeItem('claude-effort');
     }
   }, []);
+
+  const setCodexServiceTier = useCallback((tier: CodexServiceTier) => {
+    setCodexServiceTierState(tier);
+    if (tier === 'fast') {
+      localStorage.setItem(CODEX_SERVICE_TIER_STORAGE_KEY, tier);
+    } else {
+      localStorage.removeItem(CODEX_SERVICE_TIER_STORAGE_KEY);
+    }
+  }, []);
+
+  const toggleCodexServiceTier = useCallback(() => {
+    setCodexServiceTier(codexServiceTier === 'fast' ? 'default' : 'fast');
+  }, [codexServiceTier, setCodexServiceTier]);
+
+  const setCodexReasoningEffort = useCallback((effort: CodexReasoningEffort) => {
+    setCodexReasoningEffortState(effort);
+    if (effort) {
+      localStorage.setItem(CODEX_REASONING_EFFORT_STORAGE_KEY, effort);
+    } else {
+      localStorage.removeItem(CODEX_REASONING_EFFORT_STORAGE_KEY);
+    }
+  }, []);
+
+  const cycleCodexReasoningEffort = useCallback(() => {
+    const currentIndex = CODEX_REASONING_EFFORTS.indexOf(codexReasoningEffort);
+    const next = CODEX_REASONING_EFFORTS[(currentIndex + 1) % CODEX_REASONING_EFFORTS.length] ?? '';
+    setCodexReasoningEffort(next);
+  }, [codexReasoningEffort, setCodexReasoningEffort]);
 
   const cycleClaudeEffort = useCallback(() => {
     const levels = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -449,6 +493,12 @@ export function useChatProviderState({ selectedSession, selectedProject }: UseCh
     setClaudeModel,
     codexModel,
     setCodexModel,
+    codexServiceTier,
+    setCodexServiceTier,
+    toggleCodexServiceTier,
+    codexReasoningEffort,
+    setCodexReasoningEffort,
+    cycleCodexReasoningEffort,
     geminiModel,
     setGeminiModel,
     opencodeModel,

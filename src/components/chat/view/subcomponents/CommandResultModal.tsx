@@ -330,7 +330,7 @@ function ModelsContent({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5">
+    <div className="scrollbar-thin h-full overflow-y-auto">
       <div className="rounded-2xl border border-border/70 bg-muted/20 p-2.5">
         <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1.55fr)_minmax(12rem,0.7fr)_minmax(15rem,0.9fr)] lg:items-start">
           <div className="min-w-0">
@@ -408,7 +408,7 @@ function ModelsContent({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-border/70 bg-muted/15 p-3 sm:p-4">
+      <div className="mt-2.5 rounded-3xl border border-border/70 bg-muted/15 p-3 sm:p-4">
         <div className="mb-2.5 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
           <div className="min-w-0">
             <SearchField value={query} onChange={setQuery} placeholder={`Search ${providerLabel} models...`} />
@@ -419,7 +419,7 @@ function ModelsContent({
         </div>
 
         {filteredOptions.length > 0 ? (
-          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pr-1">
+          <div>
             <div className="grid gap-2 md:grid-cols-2">
               {filteredOptions.map((option, index) => {
                 const isCurrent = option.value === currentModel;
@@ -429,22 +429,16 @@ function ModelsContent({
                 return (
                   <div
                     key={option.value}
-                    className={`settings-content-enter group flex min-h-[4.5rem] items-start gap-3 rounded-2xl border p-3 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
+                    className={`settings-content-enter group flex min-h-[4.5rem] items-start gap-3 rounded-2xl border p-3 shadow-sm transition-all duration-200 ${
                       isCurrent
                         ? 'border-primary/45 bg-primary/10'
                         : isPendingSelection
                           ? 'border-emerald-500/35 bg-emerald-500/10'
-                          : 'border-border/70 bg-background/80 hover:border-primary/30 hover:bg-background'
+                          : 'border-border/70 bg-background/80'
                     }`}
                     style={{ animationDelay: `${Math.min(index * 14, 180)}ms` }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleSelectModel(option.value)}
-                      disabled={Boolean(changingModel)}
-                      className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`Use model ${option.value}`}
-                    >
+                    <div className="min-w-0 flex-1">
                       <span className="flex items-center gap-2">
                         <span className="break-all font-mono text-sm font-semibold text-foreground">{option.value}</span>
                         {isCurrent && <BadgeCheck className="h-4 w-4 shrink-0 text-primary" />}
@@ -455,26 +449,33 @@ function ModelsContent({
                       {option.description && (
                         <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.description}</span>
                       )}
-                      {isCurrent && <span className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Current selection</span>}
-                      {isPendingSelection && !isCurrent && (
-                        <span className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-400">
-                          Next response selection
-                        </span>
-                      )}
-                      {isChanging && (
-                        <span className="mt-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                          Applying...
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => copyModel(option.value)}
-                      className="rounded-lg border border-border/70 bg-muted/30 p-2 text-muted-foreground transition-colors group-hover:text-primary"
-                      aria-label={`Copy model id ${option.value}`}
-                    >
-                      {wasCopied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
-                    </button>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectModel(option.value)}
+                        disabled={Boolean(changingModel) || isCurrent}
+                        className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] transition-colors disabled:cursor-not-allowed ${
+                          isCurrent
+                            ? 'border-primary/30 bg-primary/10 text-primary'
+                            : isPendingSelection
+                              ? 'border-emerald-500/35 bg-emerald-500/10 text-emerald-400'
+                              : 'border-border/70 bg-muted/30 text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary active:scale-95'
+                        }`}
+                        aria-label={isCurrent ? 'Active model' : `Switch to ${option.value}`}
+                      >
+                        {isCurrent && <BadgeCheck className="h-3 w-3" />}
+                        {isCurrent ? 'Active' : isChanging ? '…' : isPendingSelection ? 'Queued' : 'Use'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyModel(option.value)}
+                        className="rounded-lg border border-border/70 bg-muted/30 p-1.5 text-muted-foreground transition-colors hover:text-primary"
+                        aria-label={`Copy model id ${option.value}`}
+                      >
+                        {wasCopied ? <Check className="h-3.5 w-3.5" /> : <Clipboard className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -641,7 +642,7 @@ export default function CommandResultModal({
     models: {
       eyebrow: 'Model inventory',
       title: 'Available Models',
-      subtitle: 'Browse, search, and copy model IDs for the active provider.',
+      subtitle: 'Tap a model card to switch — changes take effect on the next response.',
       icon: Cpu,
     },
     cost: {

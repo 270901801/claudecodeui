@@ -10,14 +10,14 @@ import type {
   RefObject,
   TouchEvent,
 } from 'react';
-import { ImageIcon, MessageSquareIcon, XIcon, ArrowDownIcon, Loader2, BrainIcon } from 'lucide-react';
+import { ImageIcon, MessageSquareIcon, XIcon, ArrowDownIcon, Loader2, BrainIcon, GaugeIcon } from 'lucide-react';
 
 import type { LLMProvider } from '../../../../types/app';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 import type { QueuedMessage } from '../../hooks/useChatComposerState';
-import type { PendingPermissionRequest, PermissionMode } from '../../types/types';
+import type { CodexReasoningEffort, CodexServiceTier, PendingPermissionRequest, PermissionMode } from '../../types/types';
 import {
   PromptInput,
   PromptInputHeader,
@@ -31,7 +31,6 @@ import {
 
 import CommandMenu from './CommandMenu';
 import ActivityIndicator from './ActivityIndicator';
-import RunDurationIndicator from './RunDurationIndicator';
 import ImageAttachment from './ImageAttachment';
 import VoiceInputButton from './VoiceInputButton';
 import PermissionRequestsBanner from './PermissionRequestsBanner';
@@ -60,8 +59,6 @@ interface ChatComposerProps {
   ) => void;
   handleGrantToolPermission: (suggestion: { entry: string; toolName: string }) => { success: boolean };
   activity: SessionActivity | null;
-  /** Total elapsed time of the most recently completed run, in ms (null when none). */
-  lastRunElapsedMs?: number | null;
   isLoading: boolean;
   onAbortSession: () => void;
   permissionMode: PermissionMode | string;
@@ -69,6 +66,8 @@ interface ChatComposerProps {
   provider?: LLMProvider;
   claudeEffort?: string;
   onCycleEffort?: () => void;
+  codexReasoningEffort: CodexReasoningEffort;
+  onCycleCodexReasoningEffort: () => void;
   tokenBudget: Record<string, unknown> | null;
   onShowTokenUsage: () => void;
   slashCommandsCount: number;
@@ -114,6 +113,8 @@ interface ChatComposerProps {
   placeholder: string;
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
+  codexServiceTier: CodexServiceTier;
+  onToggleCodexServiceTier: () => void;
 }
 
 export default function ChatComposer({
@@ -121,7 +122,6 @@ export default function ChatComposer({
   handlePermissionDecision,
   handleGrantToolPermission,
   activity,
-  lastRunElapsedMs,
   isLoading,
   onAbortSession,
   permissionMode,
@@ -129,6 +129,8 @@ export default function ChatComposer({
   provider,
   claudeEffort,
   onCycleEffort,
+  codexReasoningEffort,
+  onCycleCodexReasoningEffort,
   tokenBudget,
   onShowTokenUsage,
   slashCommandsCount,
@@ -174,6 +176,8 @@ export default function ChatComposer({
   placeholder,
   isTextareaExpanded,
   sendByCtrlEnter,
+  codexServiceTier,
+  onToggleCodexServiceTier,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
 
@@ -216,9 +220,7 @@ export default function ChatComposer({
   return (
     <div className="flex-shrink-0 p-2 pb-2 sm:p-4 sm:pb-4 md:p-4 md:pb-6">
       {!hasPendingPermissions && (
-        activity
-          ? <ActivityIndicator activity={activity} onAbort={onAbortSession} />
-          : <RunDurationIndicator elapsedMs={lastRunElapsedMs ?? null} />
+        <ActivityIndicator activity={activity} onAbort={onAbortSession} />
       )}
 
       {pendingPermissionRequests.length > 0 && (
@@ -456,6 +458,60 @@ export default function ChatComposer({
                   <BrainIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   <span className="hidden whitespace-nowrap sm:inline">
                     {claudeEffort || t('input.effortAuto', { defaultValue: 'auto' })}
+                  </span>
+                </div>
+              </button>
+            )}
+
+            {provider === 'codex' && (
+              <button
+                type="button"
+                onClick={onCycleCodexReasoningEffort}
+                className={`rounded-lg border p-2 text-xs font-medium transition-all duration-200 sm:px-2.5 sm:py-1 ${
+                  !codexReasoningEffort
+                    ? 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted'
+                    : codexReasoningEffort === 'low'
+                      ? 'border-sky-300/60 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-600/40 dark:bg-sky-900/15 dark:text-sky-300 dark:hover:bg-sky-900/25'
+                      : codexReasoningEffort === 'medium'
+                        ? 'border-blue-300/60 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-600/40 dark:bg-blue-900/15 dark:text-blue-300 dark:hover:bg-blue-900/25'
+                        : codexReasoningEffort === 'high'
+                          ? 'border-violet-300/60 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600/40 dark:bg-violet-900/15 dark:text-violet-300 dark:hover:bg-violet-900/25'
+                          : 'border-purple-300/60 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-600/40 dark:bg-purple-900/15 dark:text-purple-300 dark:hover:bg-purple-900/25'
+                }`}
+                aria-label={t('codex.reasoning.ariaLabel', {
+                  effort: codexReasoningEffort || t('input.effortAuto', { defaultValue: 'auto' }),
+                  defaultValue: 'Codex reasoning {{effort}}',
+                })}
+                title={t('codex.reasoning.toggle', { defaultValue: 'Click to change Codex reasoning effort' })}
+              >
+                <div className="flex items-center gap-1.5">
+                  <BrainIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="hidden whitespace-nowrap sm:inline">
+                    {codexReasoningEffort || t('input.effortAuto', { defaultValue: 'auto' })}
+                  </span>
+                </div>
+              </button>
+            )}
+
+            {provider === 'codex' && (
+              <button
+                type="button"
+                onClick={onToggleCodexServiceTier}
+                className={`rounded-lg border p-2 text-xs font-medium tabular-nums transition-all duration-200 sm:px-2.5 sm:py-1 ${
+                  codexServiceTier === 'fast'
+                    ? 'border-amber-300/70 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/40 dark:bg-amber-900/20 dark:text-amber-200 dark:hover:bg-amber-900/30'
+                    : 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted'
+                }`}
+                aria-label={t('codex.speed.ariaLabel', {
+                  speed: codexServiceTier === 'fast' ? '1.5x' : '1x',
+                  defaultValue: 'Codex speed {{speed}}',
+                })}
+                title={t('codex.speed.toggle', { defaultValue: 'Toggle Codex 1.5x speed' })}
+              >
+                <div className="flex items-center gap-1.5">
+                  <GaugeIcon className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="hidden whitespace-nowrap sm:inline">
+                    {codexServiceTier === 'fast' ? '1.5x' : '1x'}
                   </span>
                 </div>
               </button>

@@ -17,6 +17,8 @@ import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import { safeLocalStorage } from '../utils/chatStorage';
 import type {
   ChatMessage,
+  CodexReasoningEffort,
+  CodexServiceTier,
   PendingPermissionRequest,
   PermissionMode,
   SessionEstablishedContext,
@@ -50,6 +52,8 @@ interface UseChatComposerStateArgs {
   cursorModel: string;
   claudeModel: string;
   codexModel: string;
+  codexServiceTier: CodexServiceTier;
+  codexReasoningEffort: CodexReasoningEffort;
   geminiModel: string;
   opencodeModel: string;
   claudeEffort?: string;
@@ -188,6 +192,16 @@ const getNotificationSessionSummary = (
   return normalizedFallback.length > 80 ? `${normalizedFallback.slice(0, 77)}...` : normalizedFallback;
 };
 
+function getCodexServiceTierOption(model: string, tier: CodexServiceTier): 'fast' | undefined {
+  if (tier !== 'fast') {
+    return undefined;
+  }
+
+  // Codex may expose fast either as a model variant (for example `*-fast`) or
+  // as a service tier for the base model. Avoid double-applying it.
+  return model.toLowerCase().endsWith('-fast') ? undefined : 'fast';
+}
+
 export function useChatComposerState({
   selectedProject,
   selectedSession,
@@ -198,6 +212,8 @@ export function useChatComposerState({
   cursorModel,
   claudeModel,
   codexModel,
+  codexServiceTier,
+  codexReasoningEffort,
   geminiModel,
   opencodeModel,
   claudeEffort,
@@ -676,6 +692,8 @@ export function useChatComposerState({
               : provider === 'opencode'
                 ? opencodeModel
                 : claudeModel;
+      const codexServiceTierOption =
+        provider === 'codex' ? getCodexServiceTierOption(model, codexServiceTier) : undefined;
 
       // One message shape for every provider. The backend resolves the
       // provider, project path, and provider-native resume id from the
@@ -687,6 +705,8 @@ export function useChatComposerState({
         options: {
           model,
           effort: provider === 'claude' && claudeEffort ? claudeEffort : undefined,
+          serviceTier: codexServiceTierOption,
+          reasoningEffort: provider === 'codex' && codexReasoningEffort ? codexReasoningEffort : undefined,
           // Codex has no plan mode; downgrade rather than sending an
           // unsupported value to its runtime.
           permissionMode: provider === 'codex' && permissionMode === 'plan' ? 'default' : permissionMode,
@@ -702,6 +722,8 @@ export function useChatComposerState({
       claudeEffort,
       claudeModel,
       codexModel,
+      codexServiceTier,
+      codexReasoningEffort,
       cursorModel,
       geminiModel,
       onSessionProcessing,
