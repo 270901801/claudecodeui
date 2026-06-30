@@ -16,6 +16,7 @@ import type { LLMProvider } from '../../../../types/app';
 import { useVoiceInput } from '../../hooks/useVoiceInput';
 import { useVoiceAvailable } from '../../hooks/useVoiceAvailable';
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
+import type { QueuedMessage } from '../../hooks/useChatComposerState';
 import type { PendingPermissionRequest, PermissionMode } from '../../types/types';
 import {
   PromptInput,
@@ -30,6 +31,7 @@ import {
 
 import CommandMenu from './CommandMenu';
 import ActivityIndicator from './ActivityIndicator';
+import RunDurationIndicator from './RunDurationIndicator';
 import ImageAttachment from './ImageAttachment';
 import VoiceInputButton from './VoiceInputButton';
 import PermissionRequestsBanner from './PermissionRequestsBanner';
@@ -58,6 +60,8 @@ interface ChatComposerProps {
   ) => void;
   handleGrantToolPermission: (suggestion: { entry: string; toolName: string }) => { success: boolean };
   activity: SessionActivity | null;
+  /** Total elapsed time of the most recently completed run, in ms (null when none). */
+  lastRunElapsedMs?: number | null;
   isLoading: boolean;
   onAbortSession: () => void;
   permissionMode: PermissionMode | string;
@@ -71,6 +75,8 @@ interface ChatComposerProps {
   onToggleCommandMenu: () => void;
   hasInput: boolean;
   onClearInput: () => void;
+  queuedMessages?: QueuedMessage[];
+  onRemoveQueuedMessage?: (id: string) => void;
   isUserScrolledUp: boolean;
   hasMessages: boolean;
   onScrollToBottom: () => void;
@@ -115,6 +121,7 @@ export default function ChatComposer({
   handlePermissionDecision,
   handleGrantToolPermission,
   activity,
+  lastRunElapsedMs,
   isLoading,
   onAbortSession,
   permissionMode,
@@ -128,6 +135,8 @@ export default function ChatComposer({
   onToggleCommandMenu,
   hasInput,
   onClearInput,
+  queuedMessages,
+  onRemoveQueuedMessage,
   isUserScrolledUp,
   hasMessages,
   onScrollToBottom,
@@ -207,7 +216,9 @@ export default function ChatComposer({
   return (
     <div className="flex-shrink-0 p-2 pb-2 sm:p-4 sm:pb-4 md:p-4 md:pb-6">
       {!hasPendingPermissions && (
-        <ActivityIndicator activity={activity} onAbort={onAbortSession} />
+        activity
+          ? <ActivityIndicator activity={activity} onAbort={onAbortSession} />
+          : <RunDurationIndicator elapsedMs={lastRunElapsedMs ?? null} />
       )}
 
       {pendingPermissionRequests.length > 0 && (
@@ -269,6 +280,40 @@ export default function ChatComposer({
           isOpen={isCommandMenuOpen}
           frequentCommands={frequentCommands}
         />
+
+        {queuedMessages && queuedMessages.length > 0 && (
+          <div className="mb-2 flex flex-col gap-1">
+            {queuedMessages.map((message, index) => (
+              <div
+                key={message.id}
+                className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground"
+              >
+                <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+                  {index + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate" title={message.content}>
+                  {message.content}
+                </span>
+                {message.images.length > 0 && (
+                  <span className="flex flex-shrink-0 items-center gap-0.5">
+                    <ImageIcon className="h-3 w-3" />
+                    {message.images.length}
+                  </span>
+                )}
+                {onRemoveQueuedMessage && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveQueuedMessage(message.id)}
+                    className="flex-shrink-0 rounded p-0.5 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                    title={t('input.removeQueued', { defaultValue: 'Remove from queue' })}
+                  >
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
 
         <PromptInput
           onSubmit={onSubmit as (event: FormEvent<HTMLFormElement>) => void}

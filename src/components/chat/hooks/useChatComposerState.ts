@@ -27,6 +27,19 @@ import { escapeRegExp } from '../utils/chatFormatting';
 import { useFileMentions } from './useFileMentions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
 
+/**
+ * A message the user submitted while a turn was already in flight. Queued
+ * items are stored verbatim (raw text + un-uploaded image files) and flushed
+ * one-per-turn as the owning session returns to idle — mirroring the
+ * Claude Code / Codex "type-ahead while running" behaviour.
+ */
+export interface QueuedMessage {
+  id: string;
+  sessionId: string;
+  content: string;
+  images: File[];
+}
+
 interface UseChatComposerStateArgs {
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
@@ -216,6 +229,11 @@ export function useChatComposerState({
   const [imageErrors, setImageErrors] = useState<Map<string, string>>(new Map());
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
   const [commandModalPayload, setCommandModalPayload] = useState<CommandModalPayload | null>(null);
+  // Messages typed while a turn is in flight, flushed one-per-turn on idle.
+  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
+  const queuedMessagesRef = useRef<QueuedMessage[]>(queuedMessages);
+  queuedMessagesRef.current = queuedMessages;
+  const queuedIdRef = useRef(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputHighlightRef = useRef<HTMLDivElement>(null);
@@ -542,57 +560,38 @@ export function useChatComposerState({
     noKeyboard: true,
   });
 
-  const handleSubmit = useCallback(
-    async (
-      event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>,
-    ) => {
-      event.preventDefault();
-      const currentInput = inputValueRef.current;
-      if (!currentInput.trim() || isLoading || !selectedProject) {
+  // Reset the composer (text, images, draft) after a message leaves the box —
+  // whether it was sent immediately or parked in the queue.
+  const clearComposer = useCallback(() => {
+    setInput('');
+    inputValueRef.current = '';
+    resetCommandMenuState();
+    setAttachedImages([]);
+    setUploadingImages(new Map());
+    setImageErrors(new Map());
+    setIsTextareaExpanded(false);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    if (selectedProject) {
+      safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
+    }
+  }, [resetCommandMenuState, selectedProject]);
+
+  // The actual send: upload any images, drop the user bubble, mark the session
+  // processing, and emit the provider-agnostic `chat.send`. Shared by the
+  // immediate submit path and the queue-flush effect so both behave identically.
+  const dispatchMessage = useCallback(
+    async (params: { content: string; imageFiles: File[]; targetSessionId: string }) => {
+      const { content, imageFiles, targetSessionId } = params;
+      if (!selectedProject) {
         return;
       }
 
-      // Intercept slash commands only when "/" is the first input character.
-      // Also accept exact "help" as a convenience alias for users who expect CLI-style help.
-      const commandInput = currentInput.trimEnd();
-      const isHelpAlias = commandInput.trim().toLowerCase() === 'help';
-      if (commandInput.startsWith('/') || isHelpAlias) {
-        const firstSpace = commandInput.indexOf(' ');
-        const commandName = isHelpAlias
-          ? '/help'
-          : firstSpace > 0 ? commandInput.slice(0, firstSpace) : commandInput;
-        const matchedCommand =
-          slashCommands.find((cmd: SlashCommand) => cmd.name === commandName) ||
-          (commandName === '/help'
-            ? ({
-                name: '/help',
-                description: 'Show help documentation for Claude Code',
-                namespace: 'builtin',
-                metadata: { type: 'builtin' },
-              } as SlashCommand)
-            : undefined);
-        if (matchedCommand && matchedCommand.type !== 'skill') {
-          executeCommand(matchedCommand, isHelpAlias ? '/help' : commandInput);
-          setInput('');
-          inputValueRef.current = '';
-          setAttachedImages([]);
-          setUploadingImages(new Map());
-          setImageErrors(new Map());
-          resetCommandMenuState();
-          setIsTextareaExpanded(false);
-          if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-          }
-          return;
-        }
-      }
-
-      const messageContent = currentInput;
-
       let uploadedImages: unknown[] = [];
-      if (attachedImages.length > 0) {
+      if (imageFiles.length > 0) {
         const formData = new FormData();
-        attachedImages.forEach((file) => {
+        imageFiles.forEach((file) => {
           formData.append('images', file);
         });
 
@@ -621,66 +620,16 @@ export function useChatComposerState({
         }
       }
 
-      const resolvedProjectPath = selectedProject.fullPath || selectedProject.path || '';
-      const sessionSummary = getNotificationSessionSummary(selectedSession, currentInput);
+      const sessionSummary = getNotificationSessionSummary(selectedSession, content);
 
-      // The conversation always has a stable backend-allocated session id
-      // BEFORE the first websocket send: brand-new chats allocate one here
-      // via the session gateway. There is no client-visible session-id
-      // handoff later — this id stays valid for the conversation's lifetime.
-      let targetSessionId = selectedSession?.id || currentSessionId || null;
-      if (!targetSessionId) {
-        try {
-          const response = await authenticatedFetch('/api/providers/sessions', {
-            method: 'POST',
-            body: JSON.stringify({
-              provider,
-              projectPath: resolvedProjectPath,
-            }),
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to create session (${response.status})`);
-          }
-          const body = await response.json();
-          targetSessionId = body?.data?.sessionId || null;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          console.error('Session creation failed:', error);
-          addMessage({
-            type: 'error',
-            content: `Failed to start a new session: ${message}`,
-            timestamp: new Date(),
-          });
-          return;
-        }
-
-        if (!targetSessionId) {
-          addMessage({
-            type: 'error',
-            content: 'Failed to start a new session: no session id returned.',
-            timestamp: new Date(),
-          });
-          return;
-        }
-
-        onSessionEstablished?.(targetSessionId, {
-          provider,
-          project: selectedProject,
-          summary: sessionSummary,
-        });
-      }
-
-      const userMessage: ChatMessage = {
+      addMessage({
         type: 'user',
-        content: currentInput,
+        content,
         images: uploadedImages as any,
         timestamp: new Date(),
-      };
-
-      addMessage(userMessage);
+      });
       // Mark this request as processing in the per-session activity map (the
-      // single source of truth the indicator derives from). The id is always
-      // concrete at this point — no pending placeholder exists anymore.
+      // single source of truth the indicator derives from).
       onSessionProcessing?.(targetSessionId, {
         statusText: null,
         canInterrupt: true,
@@ -734,7 +683,7 @@ export function useChatComposerState({
       sendMessage({
         type: 'chat.send',
         sessionId: targetSessionId,
-        content: messageContent,
+        content,
         options: {
           model,
           effort: provider === 'claude' && claudeEffort ? claudeEffort : undefined,
@@ -747,42 +696,150 @@ export function useChatComposerState({
           images: uploadedImages,
         },
       });
+    },
+    [
+      addMessage,
+      claudeEffort,
+      claudeModel,
+      codexModel,
+      cursorModel,
+      geminiModel,
+      onSessionProcessing,
+      opencodeModel,
+      permissionMode,
+      provider,
+      scrollToBottom,
+      selectedProject,
+      selectedSession,
+      sendMessage,
+      setIsUserScrolledUp,
+    ],
+  );
 
-      setInput('');
-      inputValueRef.current = '';
-      resetCommandMenuState();
-      setAttachedImages([]);
-      setUploadingImages(new Map());
-      setImageErrors(new Map());
-      setIsTextareaExpanded(false);
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+  const handleSubmit = useCallback(
+    async (
+      event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>,
+    ) => {
+      event.preventDefault();
+      const currentInput = inputValueRef.current;
+      if (!currentInput.trim() || !selectedProject) {
+        return;
       }
 
-      safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
+      // Intercept slash commands only when "/" is the first input character.
+      // Also accept exact "help" as a convenience alias for users who expect CLI-style help.
+      const commandInput = currentInput.trimEnd();
+      const isHelpAlias = commandInput.trim().toLowerCase() === 'help';
+      if (commandInput.startsWith('/') || isHelpAlias) {
+        const firstSpace = commandInput.indexOf(' ');
+        const commandName = isHelpAlias
+          ? '/help'
+          : firstSpace > 0 ? commandInput.slice(0, firstSpace) : commandInput;
+        const matchedCommand =
+          slashCommands.find((cmd: SlashCommand) => cmd.name === commandName) ||
+          (commandName === '/help'
+            ? ({
+                name: '/help',
+                description: 'Show help documentation for Claude Code',
+                namespace: 'builtin',
+                metadata: { type: 'builtin' },
+              } as SlashCommand)
+            : undefined);
+        if (matchedCommand && matchedCommand.type !== 'skill') {
+          executeCommand(matchedCommand, isHelpAlias ? '/help' : commandInput);
+          clearComposer();
+          return;
+        }
+      }
+
+      const messageContent = currentInput;
+
+      // A turn is already running for this session: park the message instead of
+      // blocking it. The queue is flushed one-per-turn as the session goes idle
+      // (see the flush effect below). Queueing only happens once a session is
+      // live, so a concrete session id always exists here.
+      if (isLoading) {
+        const queueSessionId = selectedSession?.id || currentSessionId || null;
+        if (queueSessionId) {
+          const imageFiles = attachedImages.slice();
+          queuedIdRef.current += 1;
+          const queuedId = `q${queuedIdRef.current}`;
+          setQueuedMessages((prev) => [
+            ...prev,
+            { id: queuedId, sessionId: queueSessionId, content: messageContent, images: imageFiles },
+          ]);
+          clearComposer();
+        }
+        return;
+      }
+
+      const resolvedProjectPath = selectedProject.fullPath || selectedProject.path || '';
+      const sessionSummary = getNotificationSessionSummary(selectedSession, currentInput);
+
+      // The conversation always has a stable backend-allocated session id
+      // BEFORE the first websocket send: brand-new chats allocate one here
+      // via the session gateway. There is no client-visible session-id
+      // handoff later — this id stays valid for the conversation's lifetime.
+      let targetSessionId = selectedSession?.id || currentSessionId || null;
+      if (!targetSessionId) {
+        try {
+          const response = await authenticatedFetch('/api/providers/sessions', {
+            method: 'POST',
+            body: JSON.stringify({
+              provider,
+              projectPath: resolvedProjectPath,
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to create session (${response.status})`);
+          }
+          const body = await response.json();
+          targetSessionId = body?.data?.sessionId || null;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          console.error('Session creation failed:', error);
+          addMessage({
+            type: 'error',
+            content: `Failed to start a new session: ${message}`,
+            timestamp: new Date(),
+          });
+          return;
+        }
+
+        if (!targetSessionId) {
+          addMessage({
+            type: 'error',
+            content: 'Failed to start a new session: no session id returned.',
+            timestamp: new Date(),
+          });
+          return;
+        }
+
+        onSessionEstablished?.(targetSessionId, {
+          provider,
+          project: selectedProject,
+          summary: sessionSummary,
+        });
+      }
+
+      // Clear the composer up front so the box is immediately ready for the next
+      // (queued) message; `dispatchMessage` owns its own copies of the content.
+      const imageFiles = attachedImages.slice();
+      clearComposer();
+      await dispatchMessage({ content: messageContent, imageFiles, targetSessionId });
     },
     [
       selectedSession,
       attachedImages,
-      claudeModel,
-      codexModel,
+      clearComposer,
       currentSessionId,
-      cursorModel,
+      dispatchMessage,
       executeCommand,
-      geminiModel,
-      opencodeModel,
       isLoading,
-      onSessionProcessing,
       onSessionEstablished,
-      permissionMode,
       provider,
-      resetCommandMenuState,
-      scrollToBottom,
       selectedProject,
-      sendMessage,
       addMessage,
-      setIsUserScrolledUp,
       slashCommands,
     ],
   );
@@ -790,6 +847,37 @@ export function useChatComposerState({
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
+
+  // Drain the queue one message per turn. The effect only re-runs when the
+  // viewed session or its processing state changes; the queue itself is read
+  // through a ref so adding/removing items never re-triggers a flush. When the
+  // session is idle and owns a queued message, dispatch the oldest one — which
+  // re-marks the session processing, so the next item waits for the following
+  // idle transition. Switching back to an idle session that still has parked
+  // messages flushes them too.
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+    const activeId = selectedSession?.id || currentSessionId || null;
+    if (!activeId) {
+      return;
+    }
+    const next = queuedMessagesRef.current.find((message) => message.sessionId === activeId);
+    if (!next) {
+      return;
+    }
+    setQueuedMessages((prev) => prev.filter((message) => message.id !== next.id));
+    void dispatchMessage({
+      content: next.content,
+      imageFiles: next.images,
+      targetSessionId: activeId,
+    });
+  }, [isLoading, selectedSession, currentSessionId, dispatchMessage]);
+
+  const removeQueuedMessage = useCallback((id: string) => {
+    setQueuedMessages((prev) => prev.filter((message) => message.id !== id));
+  }, []);
 
   // A voice transcript either fills the input (to edit before sending) or, when the
   // user tapped "stop and send", is submitted straight away. Mirror the value into
@@ -1040,6 +1128,8 @@ export function useChatComposerState({
     isDragActive,
     openImagePicker: open,
     handleSubmit,
+    queuedMessages,
+    removeQueuedMessage,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,

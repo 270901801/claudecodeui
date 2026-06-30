@@ -27,6 +27,8 @@ type DiffLine = {
 type MessageComponentProps = {
   message: ChatMessage;
   prevMessage: ChatMessage | null;
+  /** Total reply duration in ms for the closing assistant row of a turn (null otherwise). */
+  replyDurationMs?: number | null;
   createDiff: (oldStr: string, newStr: string) => DiffLine[];
   onFileOpen?: (filePath: string, diffInfo?: unknown) => void;
   onShowSettings?: () => void;
@@ -50,7 +52,7 @@ type InteractiveOption = {
 
 const COPY_HIDDEN_TOOL_NAMES = new Set(['Bash', 'Edit', 'Write', 'ApplyPatch']);
 
-const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, autoExpandTools, showRawParameters, showThinking, selectedProject, provider, canFork, onForkAtMessage }: MessageComponentProps) => {
+const MessageComponent = memo(({ message, prevMessage, replyDurationMs, createDiff, onFileOpen, autoExpandTools, showRawParameters, showThinking, selectedProject, provider, canFork, onForkAtMessage }: MessageComponentProps) => {
   const { t } = useTranslation('chat');
   const isGrouped = prevMessage && prevMessage.type === message.type &&
     ((prevMessage.type === 'assistant') ||
@@ -135,6 +137,16 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
   }, [autoExpandTools, isExpanded, message.isToolUse]);
 
   const formattedTime = useMemo(() => new Date(message.timestamp).toLocaleTimeString(), [message.timestamp]);
+  const replyDurationLabel = useMemo(() => {
+    if (typeof replyDurationMs !== 'number' || replyDurationMs < 0) return null;
+    const totalSeconds = Math.max(0, Math.round(replyDurationMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const time = minutes < 1
+      ? t('claudeStatus.elapsed.seconds', { count: seconds, defaultValue: '{{count}}s' })
+      : t('claudeStatus.elapsed.minutesSeconds', { minutes, seconds, defaultValue: '{{minutes}}m {{seconds}}s' });
+    return t('claudeStatus.completed', { time, defaultValue: 'Took {{time}}' });
+  }, [replyDurationMs, t]);
   const shouldHideThinkingMessage = Boolean(message.isThinking && !showThinking);
 
   if (shouldHideThinkingMessage) {
@@ -465,7 +477,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
               </div>
             )}
 
-            {(shouldShowAssistantCopyControl || canForkMessage || !isGrouped) && (
+            {(shouldShowAssistantCopyControl || canForkMessage || replyDurationLabel || !isGrouped) && (
               <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
                 {shouldShowAssistantCopyControl && (
                   <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
@@ -474,6 +486,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, a
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
                 {renderForkButton('assistant')}
+                {replyDurationLabel && (
+                  <span className="tabular-nums text-muted-foreground/60">{replyDurationLabel}</span>
+                )}
                 {!isGrouped && <span>{formattedTime}</span>}
               </div>
             )}

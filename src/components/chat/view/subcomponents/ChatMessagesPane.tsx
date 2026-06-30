@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 
 import type { ChatMessage } from '../../types/types';
@@ -149,6 +149,51 @@ export default function ChatMessagesPane({
     return candidateKey;
   }, []);
 
+  // Per-turn reply duration, anchored on transcript timestamps so it survives a
+  // history reload (the live indicator vanishes the instant a run completes).
+  // A "turn" runs from a user message to the last assistant text message before
+  // the next user message; the total is stamped on that closing assistant row.
+  // The currently-streaming turn is skipped — its duration isn't final yet.
+  const replyDurations = useMemo(() => {
+    const result = new Map<number, number>();
+    const ms = (value: ChatMessage['timestamp']): number | null => {
+      if (value === undefined || value === null) return null;
+      const parsed = new Date(value).getTime();
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    const isReplyText = (m: ChatMessage) =>
+      m.type === 'assistant' &&
+      !m.isToolUse &&
+      !m.isThinking &&
+      !m.isInteractivePrompt &&
+      !m.isTaskNotification;
+
+    let turnStartTs: number | null = null;
+    let closingAssistantIdx: number | null = null;
+    const flush = (isOpenTurn: boolean) => {
+      // The open (last) turn is still streaming while the session is processing,
+      // so its timestamps aren't final — leave it to the live indicator.
+      if (isOpenTurn && isProcessing) return;
+      if (closingAssistantIdx === null || turnStartTs === null) return;
+      const endTs = ms(visibleMessages[closingAssistantIdx].timestamp);
+      if (endTs !== null && endTs >= turnStartTs) {
+        result.set(closingAssistantIdx, endTs - turnStartTs);
+      }
+    };
+
+    visibleMessages.forEach((message, index) => {
+      if (message.type === 'user') {
+        flush(false);
+        turnStartTs = ms(message.timestamp);
+        closingAssistantIdx = null;
+      } else if (isReplyText(message)) {
+        closingAssistantIdx = index;
+      }
+    });
+    flush(true);
+    return result;
+  }, [visibleMessages, isProcessing]);
+
   return (
     <div
       ref={scrollContainerRef}
@@ -265,6 +310,7 @@ export default function ChatMessagesPane({
                 key={getMessageKey(message)}
                 message={message}
                 prevMessage={prevMessage}
+                replyDurationMs={replyDurations.get(index) ?? null}
                 createDiff={createDiff}
                 onFileOpen={onFileOpen}
                 onShowSettings={onShowSettings}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { api } from '../../../utils/api';
@@ -141,6 +141,34 @@ function ChatInterface({
     sessionStore,
   });
 
+  // Total duration of the most recently completed run for the viewed session.
+  // The live ActivityIndicator vanishes the instant the run's processing entry
+  // is removed (on `complete`); we capture `now - startedAt` at that transition
+  // so the composer can leave behind a static "took {{time}}" line. Tracked per
+  // session id so switching away from a still-running session doesn't mislabel
+  // its elapsed time onto another conversation.
+  const lastRunRef = useRef<{ sessionId: string | null; activity: typeof sessionActivity }>({
+    sessionId: null,
+    activity: null,
+  });
+  const [lastRunElapsedMs, setLastRunElapsedMs] = useState<number | null>(null);
+  useEffect(() => {
+    const prev = lastRunRef.current;
+    // Mirror the key `sessionActivity` is derived from in useChatSessionState
+    // (`selectedSession?.id || currentSessionId`) so the same-session guard
+    // lines up exactly with the activity it's gating on.
+    const sessionId = selectedSession?.id || currentSessionId || null;
+    const sameSession = prev.sessionId === sessionId;
+    if (sameSession && prev.activity && !sessionActivity) {
+      // Run just finished for the session we're viewing.
+      setLastRunElapsedMs(Math.max(0, Date.now() - prev.activity.startedAt));
+    } else if (sessionActivity || !sameSession) {
+      // A new run started, or we switched sessions: drop the stale duration.
+      setLastRunElapsedMs(null);
+    }
+    lastRunRef.current = { sessionId, activity: sessionActivity };
+  }, [sessionActivity, currentSessionId, selectedSession?.id]);
+
   // Brand-new conversation: the composer allocated a stable session id via
   // the session gateway before the first send. Record it locally and put it
   // in the URL — this id never changes again, so there is no later handoff.
@@ -215,6 +243,8 @@ function ChatInterface({
     isDragActive,
     openImagePicker,
     handleSubmit,
+    queuedMessages,
+    removeQueuedMessage,
     handleVoiceTranscript,
     handleInputChange,
     handleKeyDown,
@@ -420,6 +450,7 @@ function ChatInterface({
           handlePermissionDecision={handlePermissionDecision}
           handleGrantToolPermission={handleGrantToolPermission}
           activity={sessionActivity}
+          lastRunElapsedMs={lastRunElapsedMs}
           isLoading={isProcessing}
           onAbortSession={handleAbortSession}
           permissionMode={permissionMode}
@@ -433,6 +464,10 @@ function ChatInterface({
           onToggleCommandMenu={handleToggleCommandMenu}
           hasInput={Boolean(input.trim())}
           onClearInput={handleClearInput}
+          queuedMessages={queuedMessages.filter(
+            (message) => message.sessionId === (selectedSession?.id || currentSessionId),
+          )}
+          onRemoveQueuedMessage={removeQueuedMessage}
           isUserScrolledUp={isUserScrolledUp}
           hasMessages={chatMessages.length > 0}
           onScrollToBottom={scrollToBottomAndReset}

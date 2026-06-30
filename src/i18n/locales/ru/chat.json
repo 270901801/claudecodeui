@@ -216,6 +216,7 @@
       "live": "В сети",
       "paused": "Приостановлен"
     },
+    "completed": "Заняло {{time}}",
     "elapsed": {
       "seconds": "{{count}}с",
       "minutesSeconds": "{{minutes}}м {{seconds}}с",

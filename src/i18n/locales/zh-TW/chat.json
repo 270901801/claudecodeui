@@ -238,6 +238,7 @@
       "live": "進行中",
       "paused": "已暫停"
     },
+    "completed": "用時 {{time}}",
     "elapsed": {
       "seconds": "{{count}} 秒",
       "minutesSeconds": "{{minutes}} 分 {{seconds}} 秒",

@@ -218,6 +218,7 @@
       "live": "En direct",
       "paused": "En pause"
     },
+    "completed": "Durée {{time}}",
     "elapsed": {
       "seconds": "{{count}}s",
       "minutesSeconds": "{{minutes}}m {{seconds}}s",

@@ -198,6 +198,7 @@
       "live": "Live",
       "paused": "Paused"
     },
+    "completed": "{{time}} 소요",
     "elapsed": {
       "seconds": "{{count}}s",
       "minutesSeconds": "{{minutes}}m {{seconds}}s",

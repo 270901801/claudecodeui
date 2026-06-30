@@ -216,6 +216,7 @@
       "live": "Canlı",
       "paused": "Duraklatıldı"
     },
+    "completed": "{{time}} sürdü",
     "elapsed": {
       "seconds": "{{count}}s",
       "minutesSeconds": "{{minutes}}d {{seconds}}s",

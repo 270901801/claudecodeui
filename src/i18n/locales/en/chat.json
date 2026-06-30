@@ -250,6 +250,7 @@
       "live": "Live",
       "paused": "Paused"
     },
+    "completed": "Took {{time}}",
     "elapsed": {
       "seconds": "{{count}}s",
       "minutesSeconds": "{{minutes}}m {{seconds}}s",
