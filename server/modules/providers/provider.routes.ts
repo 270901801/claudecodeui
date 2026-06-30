@@ -589,7 +589,7 @@ router.post(
       typeof body.upToMessageId === 'string' && body.upToMessageId.trim()
         ? body.upToMessageId.trim()
         : null;
-    const result = sessionsService.forkSession(sessionId, upToMessageId);
+    const result = await sessionsService.forkSession(sessionId, upToMessageId);
     res.status(201).json(createApiSuccessResponse(result));
   }),
 );

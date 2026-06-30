@@ -110,7 +110,32 @@ async function getSessionMessages(
   try {
     // The DB row is keyed by the app-facing session id, while the JSONL rows
     // on disk carry the provider-native id — both ids are needed here.
-    const jsonLPath = sessionsDb.getSessionById(sessionId)?.jsonl_path;
+    const row = sessionsDb.getSessionById(sessionId);
+    let jsonLPath = row?.jsonl_path ?? null;
+    let filterSessionId = providerSessionId;
+    // Fork anchor: when set, the preview stops after this transcript uuid so the
+    // inherited history matches the branch point (null = parent's latest state).
+    let truncateAtUuid: string | null = null;
+
+    // Fork preview fallback: a freshly-forked session has no transcript of its
+    // own yet — its provider id and `jsonl_path` are assigned only after the
+    // first message materializes the branch (SDK `forkSession`/`resume`). Until
+    // then, surface the parent's transcript (up to the fork anchor) as a
+    // read-only preview so the inherited context is visible immediately instead
+    // of an empty chat.
+    if (!jsonLPath && row?.parent_session_id) {
+      // `parent_session_id` holds the parent's provider id (falling back to its
+      // app id for disk-discovered sessions), so resolve the parent row by
+      // either key.
+      const parent =
+        sessionsDb.getSessionByProviderSessionId(row.parent_session_id) ??
+        sessionsDb.getSessionById(row.parent_session_id);
+      if (parent?.jsonl_path) {
+        jsonLPath = parent.jsonl_path;
+        filterSessionId = parent.provider_session_id ?? row.parent_session_id;
+        truncateAtUuid = row.fork_up_to_message_id ?? null;
+      }
+    }
 
     if (!jsonLPath) {
       return { messages: [], total: 0, hasMore: false };
@@ -136,8 +161,13 @@ async function getSessionMessages(
 
       try {
         const entry = JSON.parse(line) as AnyRecord;
-        if (entry.sessionId === providerSessionId) {
+        if (entry.sessionId === filterSessionId) {
           messages.push(entry);
+          // Fork preview: stop once we pass the branch point (anchor inclusive)
+          // so the inherited history ends where the new conversation begins.
+          if (truncateAtUuid && entry.uuid === truncateAtUuid) {
+            break;
+          }
         }
       } catch {
         // Skip malformed JSONL lines that can happen during concurrent writes.

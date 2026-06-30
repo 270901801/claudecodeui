@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import readline from 'node:readline';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
@@ -68,6 +70,39 @@ function resolveProjectDisplayName(
   }
 
   return path.basename(projectPath) || projectPath;
+}
+
+/**
+ * Scans a Claude JSONL transcript for an entry whose bare `uuid` matches the
+ * given id. Used to validate a node-level fork anchor before creating the
+ * branch, so an invalid/stale uuid is rejected up-front instead of silently
+ * mis-anchoring the SDK `resumeSessionAt` (or being ignored, resuming the
+ * parent's full latest state). Streams the file to avoid loading large
+ * transcripts into memory.
+ */
+async function transcriptContainsUuid(jsonlPath: string, uuid: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: fs.createReadStream(jsonlPath),
+    crlfDelay: Infinity,
+  });
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const entry = JSON.parse(line) as { uuid?: unknown };
+        if (typeof entry.uuid === 'string' && entry.uuid === uuid) {
+          return true;
+        }
+      } catch {
+        // Skip malformed lines (possible during concurrent writes).
+      }
+    }
+  } finally {
+    rl.close();
+  }
+  return false;
 }
 
 /**
@@ -402,10 +437,10 @@ export const sessionsService = {
    * instead of the parent's latest state, so the conversation can continue from
    * a chosen point in the middle.
    */
-  forkSession(
+  async forkSession(
     sessionId: string,
     upToMessageId?: string | null
-  ): {
+  ): Promise<{
     sessionId: string;
     provider: LLMProvider;
     projectPath: string | null;
@@ -413,7 +448,7 @@ export const sessionsService = {
     parentProviderSessionId: string | null;
     customName: string;
     forkUpToMessageId: string | null;
-  } {
+  }> {
     const session = sessionsDb.getSessionById(sessionId);
     if (!session) {
       throw new AppError(`Session "${sessionId}" was not found.`, {
@@ -436,17 +471,46 @@ export const sessionsService = {
       });
     }
 
-    const baseName = session.custom_name?.trim() || session.session_id;
-    const customName = `${baseName} (fork)`;
-    const newSessionId = randomUUID();
+    // Resume target for the SDK fork: prefer the provider-native id, falling
+    // back to the parent app id only for sessions that actually have a
+    // transcript on disk (disk-discovered sessions, whose app id IS the native
+    // id). A brand-new in-app session with neither has nothing resumable — the
+    // fallback id would be a random UUID the CLI can't resume, silently
+    // producing a context-free branch — so reject it up-front.
+    const parentResumeId =
+      session.provider_session_id ?? (session.jsonl_path ? session.session_id : null);
+    if (!parentResumeId) {
+      throw new AppError(
+        'Cannot fork a session that has not started yet. Send at least one message first.',
+        { code: 'FORK_PARENT_NOT_STARTED', statusCode: 400 }
+      );
+    }
+
     const forkUpToMessageId =
       typeof upToMessageId === 'string' && upToMessageId.trim() ? upToMessageId.trim() : null;
 
+    // Node-level fork: validate the anchor exists in the parent transcript so a
+    // stale/invalid uuid is rejected instead of silently mis-anchoring (the SDK
+    // would ignore an unknown `resumeSessionAt` and resume the full latest
+    // state). Skipped when the transcript path is unknown — we can't verify, so
+    // we don't block.
+    if (forkUpToMessageId && session.jsonl_path) {
+      const anchorExists = await transcriptContainsUuid(session.jsonl_path, forkUpToMessageId);
+      if (!anchorExists) {
+        throw new AppError(
+          'The selected fork point was not found in the conversation transcript.',
+          { code: 'FORK_ANCHOR_NOT_FOUND', statusCode: 400 }
+        );
+      }
+    }
+
+    const baseName = session.custom_name?.trim() || session.session_id;
+    const customName = `${baseName} (fork)`;
+    const newSessionId = randomUUID();
+
     sessionsDb.createAppSession(newSessionId, session.provider, session.project_path, {
       customName,
-      // Resume target for the SDK fork: prefer the provider-native id, falling
-      // back to the parent app id for sessions discovered directly on disk.
-      parentSessionId: session.provider_session_id ?? session.session_id,
+      parentSessionId: parentResumeId,
       forkUpToMessageId,
     });
 
