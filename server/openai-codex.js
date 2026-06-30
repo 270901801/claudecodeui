@@ -14,8 +14,10 @@
  */
 
 import fs from 'fs';
+import fsp from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { randomUUID } from 'crypto';
 
 import { Codex } from '@openai/codex-sdk';
 
@@ -309,10 +311,108 @@ function mapPermissionModeToCodexOptions(permissionMode) {
   }
 }
 
+function normalizeCodexServiceTier(value) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'fast' || normalized === 'flex' ? normalized : undefined;
+}
+
+function normalizeCodexReasoningEffort(value) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return ['minimal', 'low', 'medium', 'high', 'xhigh'].includes(normalized) ? normalized : undefined;
+}
+
+/**
+ * Copies a Codex JSONL session file up to (and including) the `task_complete`
+ * event for the given `targetTurnId`, writing the result as a new session file
+ * with `newSessionId`. When `targetTurnId` is null the full file is copied.
+ *
+ * Returns the path of the newly created file.
+ */
+async function forkCodexSessionFile(parentJsonlPath, targetTurnId, newSessionId) {
+  const raw = await fsp.readFile(parentJsonlPath, 'utf8');
+  const allLines = raw.split('\n');
+
+  const output = [];
+  let currentTurnId = null;
+  let foundTarget = !targetTurnId; // If no target, include everything.
+  let done = false;
+
+  for (const line of allLines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let entry;
+    try {
+      entry = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+
+    if (entry.type === 'session_meta') {
+      // Rewrite the session ID so the Codex CLI treats this as a new thread.
+      if (entry.payload && typeof entry.payload === 'object') {
+        entry.payload.id = newSessionId;
+      }
+      output.push(JSON.stringify(entry));
+      continue;
+    }
+
+    if (done) break;
+
+    output.push(trimmed);
+
+    if (
+      entry.type === 'event_msg' &&
+      entry.payload?.type === 'task_started' &&
+      typeof entry.payload.turn_id === 'string'
+    ) {
+      currentTurnId = entry.payload.turn_id;
+      if (targetTurnId && currentTurnId === targetTurnId) {
+        foundTarget = true;
+      }
+    }
+
+    if (
+      foundTarget &&
+      targetTurnId &&
+      currentTurnId === targetTurnId &&
+      entry.type === 'event_msg' &&
+      entry.payload?.type === 'task_complete'
+    ) {
+      done = true;
+    }
+  }
+
+  if (targetTurnId && !foundTarget) {
+    throw new Error(`Fork anchor turn_id "${targetTurnId}" not found in parent session`);
+  }
+
+  const now = new Date();
+  const iso = now.toISOString();
+  const year = iso.slice(0, 4);
+  const month = iso.slice(5, 7);
+  const day = iso.slice(8, 10);
+  const sessionDir = path.join(os.homedir(), '.codex', 'sessions', year, month, day);
+  await fsp.mkdir(sessionDir, { recursive: true });
+
+  const ts = iso.slice(0, 19).replace(/:/g, '-');
+  const newFilePath = path.join(sessionDir, `rollout-${ts}-${newSessionId}.jsonl`);
+  await fsp.writeFile(newFilePath, output.join('\n') + '\n', 'utf8');
+  return newFilePath;
+}
+
 /**
  * Execute a Codex query with streaming
  * @param {string} command - The prompt to send
- * @param {object} options - Options including cwd, sessionId, model, permissionMode
+ * @param {object} options - Options including cwd, sessionId, model, permissionMode, serviceTier, reasoningEffort
  * @param {WebSocket|object} ws - WebSocket connection or response writer
  */
 export async function queryCodex(command, options = {}, ws) {
@@ -322,7 +422,12 @@ export async function queryCodex(command, options = {}, ws) {
     cwd,
     projectPath,
     model,
-    permissionMode = 'default'
+    permissionMode = 'default',
+    serviceTier,
+    reasoningEffort,
+    forkSession: isForkSession,
+    resumeSessionAt: forkTurnId,
+    parentJsonlPath,
   } = options;
 
   const resolvedModel = await providerModelsService.resolveResumeModel(
@@ -333,6 +438,8 @@ export async function queryCodex(command, options = {}, ws) {
 
   const workingDirectory = cwd || projectPath || process.cwd();
   const { sandboxMode, approvalPolicy } = mapPermissionModeToCodexOptions(permissionMode);
+  const resolvedServiceTier = normalizeCodexServiceTier(serviceTier);
+  const resolvedReasoningEffort = normalizeCodexReasoningEffort(reasoningEffort);
 
   let codex;
   let thread;
@@ -345,7 +452,10 @@ export async function queryCodex(command, options = {}, ws) {
     // Initialize Codex SDK. Sanitize proxy env so the spawned Codex CLI reaches
     // OpenAI directly instead of inheriting ReClaude's Anthropic-only gateway
     // proxy (which 502s on chatgpt.com). See buildCodexEnv().
-    codex = new Codex({ env: buildCodexEnv() });
+    codex = new Codex({
+      env: buildCodexEnv(),
+      ...(resolvedServiceTier ? { config: { service_tier: resolvedServiceTier } } : {})
+    });
 
     // Thread options with sandbox and approval settings
     const threadOptions = {
@@ -353,11 +463,23 @@ export async function queryCodex(command, options = {}, ws) {
       skipGitRepoCheck: true,
       sandboxMode,
       approvalPolicy,
-      model: resolvedModel
+      model: resolvedModel,
+      ...(resolvedReasoningEffort ? { modelReasoningEffort: resolvedReasoningEffort } : {})
     };
 
-    // Start or resume thread
-    if (sessionId) {
+    // Start or resume thread. For forked Codex sessions, copy the parent JSONL
+    // up to the fork anchor, assign a new thread ID, and resume from the copy.
+    if (isForkSession && parentJsonlPath) {
+      const newThreadId = randomUUID();
+      await forkCodexSessionFile(parentJsonlPath, forkTurnId || null, newThreadId);
+      capturedSessionId = newThreadId;
+      thread = codex.resumeThread(newThreadId, threadOptions);
+      // Immediately register the new provider session ID so the run registry
+      // maps this fork's app session to the new thread ID.
+      if (ws.setSessionId && typeof ws.setSessionId === 'function') {
+        ws.setSessionId(newThreadId);
+      }
+    } else if (sessionId) {
       thread = codex.resumeThread(sessionId, threadOptions);
     } else {
       thread = codex.startThread(threadOptions);

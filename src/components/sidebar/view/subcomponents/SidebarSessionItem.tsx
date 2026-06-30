@@ -85,8 +85,8 @@ export default function SidebarSessionItem({
   const isSelected = selectedSession?.id === session.id;
   const isEditing = editingSession === session.id;
   const isPinned = Boolean(session.isPinned);
-  // Forking branches from existing history; only Claude supports it natively today.
-  const canFork = session.__provider === 'claude';
+  // Forking branches from existing history; Claude and Codex both support it.
+  const canFork = session.__provider === 'claude' || session.__provider === 'codex';
   const compactSessionAge = formatCompactSessionAge(sessionView.sessionTime, currentTime);
   const editingContainerRef = useRef<HTMLDivElement>(null);
   const showRecentIndicator = !isProcessing && sessionView.isActive;

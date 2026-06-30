@@ -172,6 +172,17 @@ async function handleChatSend(
       ? session.fork_up_to_message_id
       : null;
 
+  // For Codex forks, the runtime needs the parent session's JSONL file path to
+  // copy history up to the fork anchor into a new session file.
+  const parentJsonlPath = isForkFirstMessage
+    ? (() => {
+        const parentSession =
+          sessionsDb.getSessionByProviderSessionId(session.parent_session_id!) ??
+          sessionsDb.getSessionById(session.parent_session_id!);
+        return parentSession?.jsonl_path ?? null;
+      })()
+    : null;
+
   // The provider runtimes receive the provider-native session id (that is the
   // id their CLI/SDK understands for resume). Brand-new sessions have no
   // provider id yet, so the runtime starts fresh and announces one, which the
@@ -182,6 +193,7 @@ async function handleChatSend(
     resume: Boolean(resumeTargetId),
     forkSession: isForkFirstMessage,
     resumeSessionAt: forkUpToMessageId ?? undefined,
+    parentJsonlPath: parentJsonlPath ?? undefined,
     cwd: clientOptions.cwd ?? session.project_path ?? undefined,
     projectPath: session.project_path ?? clientOptions.projectPath,
   };

@@ -106,6 +106,40 @@ async function transcriptContainsUuid(jsonlPath: string, uuid: string): Promise<
 }
 
 /**
+ * Scans a Codex JSONL session file for a `task_started` event whose `turn_id`
+ * matches the given id. Used to validate a Codex node-level fork anchor.
+ */
+async function codexTranscriptContainsTurnId(jsonlPath: string, turnId: string): Promise<boolean> {
+  const rl = readline.createInterface({
+    input: fs.createReadStream(jsonlPath),
+    crlfDelay: Infinity,
+  });
+  try {
+    for await (const line of rl) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const entry = JSON.parse(line) as { type?: unknown; payload?: { type?: unknown; turn_id?: unknown } };
+        if (
+          entry.type === 'event_msg' &&
+          entry.payload?.type === 'task_started' &&
+          typeof entry.payload.turn_id === 'string' &&
+          entry.payload.turn_id === turnId
+        ) {
+          return true;
+        }
+      } catch {
+        // Skip malformed lines.
+      }
+    }
+  } finally {
+    rl.close();
+  }
+  return false;
+}
+
+/**
  * Application service for provider-backed session message operations.
  *
  * Callers pass a provider id and this service resolves the concrete provider
@@ -457,8 +491,8 @@ export const sessionsService = {
       });
     }
 
-    if (session.provider !== 'claude') {
-      throw new AppError('Forking is currently only supported for Claude sessions.', {
+    if (session.provider !== 'claude' && session.provider !== 'codex') {
+      throw new AppError('Forking is currently only supported for Claude and Codex sessions.', {
         code: 'FORK_UNSUPPORTED_PROVIDER',
         statusCode: 400,
       });
@@ -489,13 +523,14 @@ export const sessionsService = {
     const forkUpToMessageId =
       typeof upToMessageId === 'string' && upToMessageId.trim() ? upToMessageId.trim() : null;
 
-    // Node-level fork: validate the anchor exists in the parent transcript so a
-    // stale/invalid uuid is rejected instead of silently mis-anchoring (the SDK
-    // would ignore an unknown `resumeSessionAt` and resume the full latest
-    // state). Skipped when the transcript path is unknown — we can't verify, so
-    // we don't block.
+    // Node-level fork: validate the anchor exists in the parent transcript.
+    // For Claude, anchors are bare `uuid` fields in the JSONL.
+    // For Codex, anchors are `turn_id` values from `task_started` events.
+    // Skipped when the transcript path is unknown — we can't verify, so we don't block.
     if (forkUpToMessageId && session.jsonl_path) {
-      const anchorExists = await transcriptContainsUuid(session.jsonl_path, forkUpToMessageId);
+      const anchorExists = session.provider === 'codex'
+        ? await codexTranscriptContainsTurnId(session.jsonl_path, forkUpToMessageId)
+        : await transcriptContainsUuid(session.jsonl_path, forkUpToMessageId);
       if (!anchorExists) {
         throw new AppError(
           'The selected fork point was not found in the conversation transcript.',

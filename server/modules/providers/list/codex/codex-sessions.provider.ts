@@ -60,6 +60,7 @@ async function getCodexSessionMessages(
   sessionId: string,
   limit: number | null = null,
   offset = 0,
+  truncateAtTurnId?: string | null,
 ): Promise<CodexHistoryResult> {
   try {
     const sessionFilePath = sessionsDb.getSessionById(sessionId)?.jsonl_path;
@@ -71,6 +72,8 @@ async function getCodexSessionMessages(
 
     const messages: AnyRecord[] = [];
     let tokenUsage: AnyRecord | null = null;
+    let currentTurnId: string | null = null;
+    let pastTargetTurn = false;
     const fileStream = fsSync.createReadStream(sessionFilePath);
     const rl = readline.createInterface({
       input: fileStream,
@@ -84,6 +87,29 @@ async function getCodexSessionMessages(
 
       try {
         const entry = JSON.parse(line) as AnyRecord;
+
+        // Track the current turn_id from task_started events.
+        if (
+          entry.type === 'event_msg' &&
+          entry.payload?.type === 'task_started' &&
+          typeof entry.payload.turn_id === 'string'
+        ) {
+          currentTurnId = entry.payload.turn_id;
+        }
+
+        // If truncating, stop after the task_complete for the target turn.
+        if (truncateAtTurnId && pastTargetTurn) {
+          break;
+        }
+        if (
+          truncateAtTurnId &&
+          currentTurnId === truncateAtTurnId &&
+          entry.type === 'event_msg' &&
+          entry.payload?.type === 'task_complete'
+        ) {
+          pastTargetTurn = true;
+          continue;
+        }
 
         if (entry.type === 'event_msg' && entry.payload?.type === 'token_count' && entry.payload?.info) {
           const info = entry.payload.info as AnyRecord;
@@ -99,6 +125,7 @@ async function getCodexSessionMessages(
         if (entry.type === 'event_msg' && isVisibleCodexUserMessage(entry.payload as AnyRecord)) {
           messages.push({
             type: 'user',
+            turn_id: currentTurnId,
             timestamp: entry.timestamp,
             message: {
               role: 'user',
@@ -299,7 +326,7 @@ export class CodexSessionsProvider implements IProviderSessions {
       if (!content.trim()) {
         return [];
       }
-      return [createNormalizedMessage({
+      const userMsg = createNormalizedMessage({
         id: baseId,
         sessionId,
         timestamp: ts,
@@ -307,7 +334,11 @@ export class CodexSessionsProvider implements IProviderSessions {
         kind: 'text',
         role: 'user',
         content,
-      })];
+      });
+      if (typeof raw.turn_id === 'string' && raw.turn_id) {
+        userMsg.messageUuid = raw.turn_id;
+      }
+      return [userMsg];
     }
 
     if (raw.message?.role === 'assistant') {
@@ -527,6 +558,31 @@ export class CodexSessionsProvider implements IProviderSessions {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[CodexProvider] Failed to load session ${sessionId}:`, message);
       return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };
+    }
+
+    // Fork preview: a freshly-forked Codex session has no transcript of its own
+    // yet. Fall back to the parent's history (truncated at the fork anchor) so
+    // the UI shows inherited context before the first message materialises.
+    const rawMessages0 = Array.isArray(result) ? result : (result.messages || []);
+    if (!rawMessages0.length) {
+      const row = sessionsDb.getSessionById(sessionId);
+      if (row?.parent_session_id) {
+        const parentSession =
+          sessionsDb.getSessionByProviderSessionId(row.parent_session_id) ??
+          sessionsDb.getSessionById(row.parent_session_id);
+        if (parentSession?.jsonl_path) {
+          try {
+            result = await getCodexSessionMessages(
+              parentSession.session_id,
+              null,
+              0,
+              typeof row.fork_up_to_message_id === 'string' ? row.fork_up_to_message_id : null,
+            );
+          } catch {
+            // Ignore — fall through to empty result.
+          }
+        }
+      }
     }
 
     const rawMessages = Array.isArray(result) ? result : (result.messages || []);
