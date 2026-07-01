@@ -161,15 +161,15 @@ export default function SidebarProjectItem({
                     className="flex items-center gap-1.5"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">取消收藏?</span>
+                    <span className="whitespace-nowrap text-xs text-muted-foreground">取消收藏?</span>
                     <button
-                      className="h-7 px-2 rounded-md text-xs font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 active:scale-95 transition-all"
+                      className="h-7 rounded-md bg-destructive/10 px-2 text-xs font-medium text-destructive transition-all hover:bg-destructive/20 active:scale-95"
                       onClick={confirmUnstar}
                     >
                       确认
                     </button>
                     <button
-                      className="h-7 px-2 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80 active:scale-95 transition-all"
+                      className="h-7 rounded-md bg-muted px-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/80 active:scale-95"
                       onClick={cancelUnstar}
                     >
                       取消
@@ -316,18 +316,18 @@ export default function SidebarProjectItem({
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {pendingUnstar ? (
               <div
-                className="flex items-center gap-1 shrink-0"
+                className="flex shrink-0 items-center gap-1"
                 onClick={(event) => event.stopPropagation()}
               >
-                <span className="text-[11px] text-muted-foreground whitespace-nowrap">取消收藏?</span>
+                <span className="whitespace-nowrap text-[11px] text-muted-foreground">取消收藏?</span>
                 <button
-                  className="h-5 px-1.5 rounded text-[11px] font-medium bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                  className="h-5 rounded bg-destructive/10 px-1.5 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/20"
                   onClick={confirmUnstar}
                 >
                   确认
                 </button>
                 <button
-                  className="h-5 px-1.5 rounded text-[11px] font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+                  className="h-5 rounded bg-muted px-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80"
                   onClick={cancelUnstar}
                 >
                   取消

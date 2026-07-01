@@ -272,6 +272,19 @@ export const api = {
       }),
   },
 
+  // Scheduler endpoints (long-horizon task scheduler)
+  scheduler: {
+    listTasks: () => authenticatedFetch('/api/scheduler/tasks'),
+    getTask: (taskId) => authenticatedFetch(`/api/scheduler/tasks/${encodeURIComponent(taskId)}`),
+    createTask: (data) => authenticatedFetch('/api/scheduler/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+    cancelTask: (taskId) => authenticatedFetch(`/api/scheduler/tasks/${encodeURIComponent(taskId)}/cancel`, {
+      method: 'POST',
+    }),
+  },
+
   // Generic GET method for any endpoint
   get: (endpoint) => authenticatedFetch(`/api${endpoint}`),
 

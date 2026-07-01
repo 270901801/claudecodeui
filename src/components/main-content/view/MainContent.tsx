@@ -16,6 +16,7 @@ import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
 import { TaskMasterPanel } from '../../task-master';
+import SchedulerPanel from '../../scheduler/view/SchedulerPanel';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -201,6 +202,18 @@ function MainContent({
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
               <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+            </div>
+          )}
+
+          {activeTab === 'scheduler' && (
+            <div className="h-full overflow-hidden">
+              <SchedulerPanel
+                selectedProject={selectedProject}
+                onNavigateToSession={(targetSessionId) => {
+                  setActiveTab('chat');
+                  onNavigateToSession(targetSessionId);
+                }}
+              />
             </div>
           )}
 
